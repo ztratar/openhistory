@@ -99,6 +99,27 @@ test("allows email at the final boundary only when capture is enabled", () => {
   );
 });
 
+test("allows messaging at the final boundary only when capture is enabled", () => {
+  const messagesTyping = event("messages", "text_input");
+  messagesTyping.application = {
+    bundleIdentifier: "com.apple.MobileSMS",
+    localizedName: "Messages",
+    processIdentifier: 42
+  };
+  messagesTyping.textChange = {
+    insertedText: "Project update",
+    deletedCharacterCount: 0,
+    resultingValue: "Project update"
+  };
+  const episode = makeEpisode([messagesTyping]);
+
+  assert.throws(() => prepareEpisodeForInference(episode), /protected activity/);
+  assert.equal(
+    prepareEpisodeForInference(episode, { captureMessagingActivity: true }),
+    episode
+  );
+});
+
 test("can disable inference and switch direct providers without exposing credentials", () => {
   const settings = {
     version: 1 as const,

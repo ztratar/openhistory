@@ -38,6 +38,7 @@ test("diagnostics omit activity content, local paths, errors, and credentials", 
       captureDocumentContext: true,
       captureUISnapshots: true,
       captureEmailActivity: false,
+      captureMessagingActivity: false,
       excludedBundleIdentifiers: [secret]
     },
     accessibilityTrusted: true,

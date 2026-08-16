@@ -36,10 +36,8 @@ public enum SemanticProtectionPolicy {
         "com.apple.mail",
         "com.microsoft.Outlook"
     ]
-    private static let protectedApplications: Set<String> = [
+    private static let messagingApplications: Set<String> = [
         "com.apple.MobileSMS",
-        "com.apple.UserNotificationCenter",
-        "com.apple.notificationcenterui",
         "com.tinyspeck.slackmacgap",
         "com.microsoft.teams",
         "com.microsoft.teams2",
@@ -47,7 +45,11 @@ public enum SemanticProtectionPolicy {
         "net.whatsapp.WhatsApp",
         "org.whispersystems.signal-desktop",
         "ru.keepcoder.Telegram",
-        "org.telegram.desktop",
+        "org.telegram.desktop"
+    ]
+    private static let alwaysProtectedApplications: Set<String> = [
+        "com.apple.UserNotificationCenter",
+        "com.apple.notificationcenterui",
         "com.1password.1password",
         "com.agilebits.onepassword7",
         "com.apple.Passwords",
@@ -66,7 +68,7 @@ public enum SemanticProtectionPolicy {
         "mail.icloud.com",
         "app.fastmail.com"
     ]
-    private static let protectedWebDomains: Set<String> = [
+    private static let messagingWebDomains: Set<String> = [
         "messages.google.com",
         "app.slack.com",
         "chat.google.com",
@@ -95,9 +97,11 @@ public enum SemanticProtectionPolicy {
 
     public static func protectsApplication(
         bundleIdentifier: String,
-        captureEmailActivity: Bool = false
+        captureEmailActivity: Bool = false,
+        captureMessagingActivity: Bool = false
     ) -> Bool {
-        protectedApplications.contains(bundleIdentifier) ||
+        alwaysProtectedApplications.contains(bundleIdentifier) ||
+            (!captureMessagingActivity && messagingApplications.contains(bundleIdentifier)) ||
             (!captureEmailActivity && mailApplications.contains(bundleIdentifier))
     }
 
@@ -114,13 +118,14 @@ public enum SemanticProtectionPolicy {
 
     public static func protectsBrowserObservation(
         _ observation: BrowserObservation,
-        captureEmailActivity: Bool = false
+        captureEmailActivity: Bool = false,
+        captureMessagingActivity: Bool = false
     ) -> Bool {
         if !captureEmailActivity,
            mailWebDomains.contains(where: { domainMatches(observation.domain, $0) }) {
             return true
         }
-        if protectedWebDomains.union(protectedAdultWebDomains).contains(where: {
+        if protectedAdultWebDomains.contains(where: {
             domainMatches(normalizedDomain(observation.domain), $0)
         }) {
             return true
@@ -129,7 +134,9 @@ public enum SemanticProtectionPolicy {
         guard let components = URLComponents(string: observation.url) else { return false }
         let path = components.path.lowercased()
         let domain = normalizedDomain(observation.domain)
-        return (["x.com", "twitter.com"].contains(domain) && path.hasPrefix("/messages")) ||
+        guard !captureMessagingActivity else { return false }
+        return messagingWebDomains.contains(where: { domainMatches(domain, $0) }) ||
+            (["x.com", "twitter.com"].contains(domain) && path.hasPrefix("/messages")) ||
             (domainMatches(domain, "facebook.com") && path.hasPrefix("/messages")) ||
             (domainMatches(domain, "linkedin.com") && path.hasPrefix("/messaging")) ||
             (domainMatches(domain, "instagram.com") && path.hasPrefix("/direct")) ||

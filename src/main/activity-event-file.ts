@@ -88,6 +88,7 @@ const eventFileCache = new Map<string, {
   size: number;
   modifiedMs: number;
   captureEmailActivity: boolean;
+  captureMessagingActivity: boolean;
   events: ActivityEvent[];
   trailingBytes: Buffer;
 }>();
@@ -214,12 +215,15 @@ function parsedFileEvents(
   const stats = statSync(path);
   const cached = eventFileCache.get(path);
   const captureEmailActivity = options.captureEmailActivity ?? false;
+  const captureMessagingActivity = options.captureMessagingActivity ?? false;
   if (cached?.size === stats.size && cached.modifiedMs === stats.mtimeMs &&
-      cached.captureEmailActivity === captureEmailActivity) return cached.events;
+      cached.captureEmailActivity === captureEmailActivity &&
+      cached.captureMessagingActivity === captureMessagingActivity) return cached.events;
 
   let events: ActivityEvent[];
   let trailingBytes: Buffer;
-  if (cached && cached.captureEmailActivity === captureEmailActivity && stats.size > cached.size) {
+  if (cached && cached.captureEmailActivity === captureEmailActivity &&
+      cached.captureMessagingActivity === captureMessagingActivity && stats.size > cached.size) {
     const appended = readFileRange(path, cached.size, stats.size - cached.size);
     const parsed = parseEventChunk(Buffer.concat([cached.trailingBytes, appended]));
     events = [...cached.events, ...parsed.events];
@@ -234,6 +238,7 @@ function parsedFileEvents(
     size: stats.size,
     modifiedMs: stats.mtimeMs,
     captureEmailActivity,
+    captureMessagingActivity,
     events,
     trailingBytes
   });

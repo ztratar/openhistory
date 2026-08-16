@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { ActivityEpisode, ActivityEvent, ApplicationDescriptor, TimelineItem } from "@shared/contracts";
 import { buildTimelineGenerationRequest } from "./inference/service";
 import { TIMELINE_TASK } from "./inference/tasks";
+import type { ActivityPrivacyOptions } from "./privacy-policy";
 
 export interface AppleAdapterMessage {
   role: "system" | "user" | "assistant";
@@ -30,6 +31,7 @@ export interface AppleTimelineAdapterDatasetOptions {
   seed?: string;
   sourceEvents?: ActivityEvent[];
   captureEmailActivity?: boolean;
+  captureMessagingActivity?: boolean;
 }
 
 const DEFAULT_TRAIN_SIZE = 100;
@@ -52,7 +54,10 @@ export function buildAppleTimelineAdapterDataset(
     const episode = currentEpisode ?? reconstructEpisode(item, sourceEventsById);
     if (!episode || !item.sourceEventIds?.length) return [];
     if (!currentEpisode) reconstructedEpisodeCount += 1;
-    return [timelineExample(item, episode, options.captureEmailActivity ?? false)];
+    return [timelineExample(item, episode, {
+      captureEmailActivity: options.captureEmailActivity,
+      captureMessagingActivity: options.captureMessagingActivity
+    })];
   });
   const requested = trainSize + evalSize;
   if (eligible.length < requested) {
@@ -99,9 +104,9 @@ export function appleAdapterDatasetDigest(examples: AppleTimelineAdapterExample[
 function timelineExample(
   item: TimelineItem,
   episode: ActivityEpisode,
-  captureEmailActivity: boolean
+  privacyOptions: ActivityPrivacyOptions
 ): AppleTimelineAdapterExample {
-  const request = buildTimelineGenerationRequest("apple", episode, { captureEmailActivity });
+  const request = buildTimelineGenerationRequest("apple", episode, privacyOptions);
   const response = `{"title": ${JSON.stringify(item.title)}, "description": ${JSON.stringify(item.description)}}`;
   return {
     id: item.id,

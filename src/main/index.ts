@@ -107,8 +107,8 @@ function createWindow(): void {
   const useNativeVibrancy = process.platform === "darwin";
   const icon = openHistoryIconPath();
   mainWindow = new BrowserWindow({
-    width: 440,
-    height: 780,
+    width: 480,
+    height: 694,
     minWidth: 400,
     minHeight: 560,
     titleBarStyle: "hiddenInset",
@@ -283,7 +283,10 @@ async function initialize(): Promise<void> {
     timelineStore,
     hourStore,
     dailyRollupStore,
-    { captureEmailActivity: settings.captureEmailActivity }
+    {
+      captureEmailActivity: settings.captureEmailActivity,
+      captureMessagingActivity: settings.captureMessagingActivity
+    }
   );
   if (Object.values(privacyReconciliation).some((count) => count > 0)) {
     console.info("Removed protected activity from local history", privacyReconciliation);
@@ -292,7 +295,13 @@ async function initialize(): Promise<void> {
     config.dataDirectory,
     timelineStore,
     inference,
-    () => settingsStore.load().captureEmailActivity
+    () => {
+      const current = settingsStore.load();
+      return {
+        captureEmailActivity: current.captureEmailActivity,
+        captureMessagingActivity: current.captureMessagingActivity
+      };
+    }
   );
   hour = new HourCoordinator(timelineStore, hourStore, inference);
   dailyRollup = new DailyRollupCoordinator(timelineStore, dailyRollupStore, inference, hourStore);
@@ -308,7 +317,13 @@ async function initialize(): Promise<void> {
     inference,
     new RecentActivityReader(
       config.dataDirectory,
-      () => settingsStore.load().captureEmailActivity
+      () => {
+        const current = settingsStore.load();
+        return {
+          captureEmailActivity: current.captureEmailActivity,
+          captureMessagingActivity: current.captureMessagingActivity
+        };
+      }
     )
   );
   agentMcp.on("state", sendAgentAccessState);
@@ -422,10 +437,13 @@ async function initialize(): Promise<void> {
       }
     });
     inference.configure(inferenceSettings, activeApiKey(selection.provider));
-    settingsStore.save({
+    const savedSettings = settingsStore.save({
       ...settings,
-      inferenceOnboardingVersion: CURRENT_INFERENCE_ONBOARDING_VERSION
+      inferenceOnboardingVersion: CURRENT_INFERENCE_ONBOARDING_VERSION,
+      captureEmailActivity: selection.captureEmailActivity === true,
+      captureMessagingActivity: selection.captureMessagingActivity === true
     });
+    collector.setSettings(savedSettings);
     buildHistoryIfNeeded();
     return bootstrapState();
   });

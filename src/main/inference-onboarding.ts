@@ -17,15 +17,27 @@ export function normalizeInferenceOnboardingSelection(
   if (!INFERENCE_MODEL_OPTIONS[candidate.provider].some((option) => option.id === model)) {
     throw new Error("Choose a supported model");
   }
+  if (candidate.captureEmailActivity !== undefined &&
+      typeof candidate.captureEmailActivity !== "boolean") {
+    throw new Error("Invalid email capture selection");
+  }
+  if (candidate.captureMessagingActivity !== undefined &&
+      typeof candidate.captureMessagingActivity !== "boolean") {
+    throw new Error("Invalid messaging capture selection");
+  }
+  const captureSelections = {
+    captureEmailActivity: candidate.captureEmailActivity === true,
+    captureMessagingActivity: candidate.captureMessagingActivity === true
+  };
 
   if (!isCloudInferenceProvider(candidate.provider)) {
-    return { provider: candidate.provider, model };
+    return { provider: candidate.provider, model, ...captureSelections };
   }
 
   const apiKey = typeof candidate.apiKey === "string" ? candidate.apiKey.trim() : "";
   if (!apiKey) throw new Error(`${candidate.provider} requires an API key`);
   if (apiKey.length > 10_000) throw new Error("API key is too long");
-  return { provider: candidate.provider, model, apiKey };
+  return { provider: candidate.provider, model, apiKey, ...captureSelections };
 }
 
 export function assertInferenceOnboardingAvailability(

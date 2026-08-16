@@ -244,6 +244,18 @@ import Testing
     #expect(!SemanticProtectionPolicy.protectsPrivateBrowsingWindow(title: "Project research"))
     #expect(SemanticProtectionPolicy.protectsApplication(bundleIdentifier: "com.1password.1password"))
     #expect(SemanticProtectionPolicy.protectsApplication(bundleIdentifier: "com.tinyspeck.slackmacgap"))
+    #expect(!SemanticProtectionPolicy.protectsApplication(
+        bundleIdentifier: "com.apple.MobileSMS",
+        captureMessagingActivity: true
+    ))
+    #expect(!SemanticProtectionPolicy.protectsApplication(
+        bundleIdentifier: "com.tinyspeck.slackmacgap",
+        captureMessagingActivity: true
+    ))
+    #expect(SemanticProtectionPolicy.protectsApplication(
+        bundleIdentifier: "com.1password.1password",
+        captureMessagingActivity: true
+    ))
     #expect(SemanticProtectionPolicy.protectsApplication(bundleIdentifier: "com.apple.mail"))
     #expect(!SemanticProtectionPolicy.protectsApplication(
         bundleIdentifier: "com.apple.mail",
@@ -289,9 +301,21 @@ import Testing
         xMessages,
         captureEmailActivity: true
     ))
+    #expect(!SemanticProtectionPolicy.protectsBrowserObservation(
+        xMessages,
+        captureMessagingActivity: true
+    ))
     #expect(SemanticProtectionPolicy.protectsBrowserObservation(linkedInMessages))
+    #expect(!SemanticProtectionPolicy.protectsBrowserObservation(
+        linkedInMessages,
+        captureMessagingActivity: true
+    ))
     #expect(!SemanticProtectionPolicy.protectsBrowserObservation(unrelatedLookalike))
     #expect(SemanticProtectionPolicy.protectsBrowserObservation(protectedAdultSite))
+    #expect(SemanticProtectionPolicy.protectsBrowserObservation(
+        protectedAdultSite,
+        captureMessagingActivity: true
+    ))
     #expect(!SemanticProtectionPolicy.protectsBrowserObservation(adultLookalike))
     #expect(!SemanticProtectionPolicy.protectsBrowserObservation(linear))
     #expect(SemanticProtectionPolicy.browserApplications.contains("com.apple.Safari"))

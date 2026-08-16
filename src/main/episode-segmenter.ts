@@ -17,6 +17,7 @@ export interface SegmentOptions {
   contextSwitchGapMs?: number;
   contextLeadMs?: number;
   captureEmailActivity?: boolean;
+  captureMessagingActivity?: boolean;
 }
 
 export function segmentActivityEvents(
@@ -28,7 +29,8 @@ export function segmentActivityEvents(
   const contextSwitchGapMs = options.contextSwitchGapMs ?? DEFAULT_CONTEXT_SWITCH_GAP_MS;
   const contextLeadMs = options.contextLeadMs ?? DEFAULT_CONTEXT_LEAD_MS;
   const events = filterProtectedActivityEvents(input, {
-    captureEmailActivity: options.captureEmailActivity
+    captureEmailActivity: options.captureEmailActivity,
+    captureMessagingActivity: options.captureMessagingActivity
   })
     .filter((event) => event.kind !== "collector_started" && !isCollectorHostEvent(event) &&
       Number.isFinite(Date.parse(event.timestamp)))

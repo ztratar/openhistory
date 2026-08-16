@@ -4,6 +4,7 @@ import { segmentActivityEvents } from "./episode-segmenter";
 import { InferenceService } from "./openai-service";
 import { inferenceErrorMetadata, publicInferenceErrorMessage } from "./openai-error";
 import { isItemScopedInferenceError } from "./inference/errors";
+import type { ActivityPrivacyOptions } from "./privacy-policy";
 import { TimelineStore } from "./timeline-store";
 
 const ACTIVE_EPISODE_GRACE_MS = 5 * 60 * 1_000;
@@ -17,7 +18,7 @@ export class TimelineCoordinator {
     private readonly dataDirectory: string,
     private readonly store: TimelineStore,
     private readonly inference: InferenceService,
-    private readonly captureEmailActivity: () => boolean = () => false
+    private readonly privacyOptions: () => ActivityPrivacyOptions = () => ({})
   ) {}
 
   getState(now = Date.now()): TimelineState {
@@ -47,9 +48,7 @@ export class TimelineCoordinator {
       let itemError: unknown;
       for (const episode of pending) {
         try {
-          this.store.save(await this.inference.summarizeEpisode(episode, {
-            captureEmailActivity: this.captureEmailActivity()
-          }));
+          this.store.save(await this.inference.summarizeEpisode(episode, this.privacyOptions()));
           onStateChange?.(this.getState());
         } catch (error) {
           if (!isItemScopedInferenceError(error)) throw error;
@@ -95,10 +94,10 @@ export class TimelineCoordinator {
   }
 
   private loadEpisodes(): ActivityEpisode[] {
-    const captureEmailActivity = this.captureEmailActivity();
+    const privacyOptions = this.privacyOptions();
     return segmentActivityEvents(
-      loadActivityEvents(this.dataDirectory, undefined, { captureEmailActivity }),
-      { captureEmailActivity }
+      loadActivityEvents(this.dataDirectory, undefined, privacyOptions),
+      privacyOptions
     );
   }
 }

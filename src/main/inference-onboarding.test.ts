@@ -11,7 +11,9 @@ test("accepts the supported Apple model without a credential", () => {
     model: "system-default"
   }), {
     provider: "apple",
-    model: "system-default"
+    model: "system-default",
+    captureEmailActivity: false,
+    captureMessagingActivity: false
   });
 });
 
@@ -23,12 +25,35 @@ test("requires and trims a cloud credential", () => {
   }), {
     provider: "openai",
     model: "gpt-5.6-luna",
-    apiKey: "sk-synthetic"
+    apiKey: "sk-synthetic",
+    captureEmailActivity: false,
+    captureMessagingActivity: false
   });
   assert.throws(() => normalizeInferenceOnboardingSelection({
     provider: "anthropic",
     model: "claude-sonnet-5"
   }), /requires an API key/);
+});
+
+test("normalizes independent onboarding capture opt-ins", () => {
+  assert.deepEqual(normalizeInferenceOnboardingSelection({
+    provider: "openai",
+    model: "gpt-5.6-luna",
+    apiKey: "sk-synthetic",
+    captureEmailActivity: true,
+    captureMessagingActivity: false
+  }), {
+    provider: "openai",
+    model: "gpt-5.6-luna",
+    apiKey: "sk-synthetic",
+    captureEmailActivity: true,
+    captureMessagingActivity: false
+  });
+  assert.throws(() => normalizeInferenceOnboardingSelection({
+    provider: "apple",
+    model: "system-default",
+    captureMessagingActivity: "yes"
+  }), /Invalid messaging capture selection/);
 });
 
 test("rejects unlisted providers and models", () => {

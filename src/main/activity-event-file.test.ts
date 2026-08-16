@@ -59,6 +59,74 @@ test("keeps mail activity excluded by default and allows it only when enabled", 
   assert.equal(parseActivityEvent(gmailEvent, { captureEmailActivity: true })?.id, "gmail");
 });
 
+test("keeps messaging activity excluded by default and allows it only when enabled", () => {
+  const messagesEvent = JSON.stringify({
+    ...event("messages", "2026-08-14T09:00:00Z", "text_input"),
+    application: {
+      bundleIdentifier: "com.apple.MobileSMS",
+      localizedName: "Messages",
+      processIdentifier: 42
+    },
+    textChange: {
+      insertedText: "Project update",
+      deletedCharacterCount: 0,
+      resultingValue: "Project update"
+    }
+  });
+  assert.equal(parseActivityEvent(messagesEvent), undefined);
+  assert.equal(
+    parseActivityEvent(messagesEvent, { captureMessagingActivity: true })?.id,
+    "messages"
+  );
+
+  const directMessageEvent = JSON.stringify({
+    ...event("direct-message", "2026-08-14T09:00:01Z", "url_changed"),
+    application: {
+      bundleIdentifier: "com.google.Chrome",
+      localizedName: "Google Chrome",
+      processIdentifier: 43
+    },
+    browser: { url: "https://www.linkedin.com/messaging/thread/123", domain: "www.linkedin.com" }
+  });
+  assert.equal(parseActivityEvent(directMessageEvent), undefined);
+  assert.equal(
+    parseActivityEvent(directMessageEvent, { captureMessagingActivity: true })?.id,
+    "direct-message"
+  );
+
+  const passwordEvent = JSON.stringify({
+    ...event("password", "2026-08-14T09:00:02Z", "text_input"),
+    application: { bundleIdentifier: "com.1password.1password", processIdentifier: 44 }
+  });
+  assert.equal(
+    parseActivityEvent(passwordEvent, { captureMessagingActivity: true }),
+    undefined
+  );
+});
+
+test("invalidates the event cache when messaging capture changes", () => {
+  const directory = mkdtempSync(join(tmpdir(), "openhistory-messaging-cache-"));
+  try {
+    writeFileSync(join(directory, "events-2026-08-14.jsonl"), JSON.stringify({
+      ...event("messages", "2026-08-14T09:00:00Z", "pointer_click"),
+      application: {
+        bundleIdentifier: "com.apple.MobileSMS",
+        localizedName: "Messages",
+        processIdentifier: 42
+      }
+    }));
+
+    assert.deepEqual(loadActivityEvents(directory), []);
+    assert.deepEqual(
+      loadActivityEvents(directory, undefined, { captureMessagingActivity: true }).map(({ id }) => id),
+      ["messages"]
+    );
+    assert.deepEqual(loadActivityEvents(directory), []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("bounded loading returns the newest valid unique events across daily files", () => {
   const directory = mkdtempSync(join(tmpdir(), "openhistory-loader-"));
   try {

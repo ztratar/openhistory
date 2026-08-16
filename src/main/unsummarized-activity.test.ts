@@ -25,7 +25,7 @@ test("returns activity from the requested recent time window, not a fixed event 
 
   const reader = new RecentActivityReader(
     directory,
-    () => false,
+    () => ({}),
     () => new Date("2026-08-15T10:11:00.000Z")
   );
   const result = reader.getRecent(10);
@@ -57,7 +57,7 @@ test("returns recent events regardless of whether the timeline has already summa
 
   const result = new RecentActivityReader(
     directory,
-    () => false,
+    () => ({}),
     () => new Date("2026-08-15T10:02:00.000Z")
   ).getRecent();
 
