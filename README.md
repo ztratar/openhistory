@@ -122,6 +122,19 @@ The read-only MCP tools can:
 
 The default endpoint is `http://127.0.0.1:47831/openhistory/mcp`.
 
+## Where we'd love help
+
+OpenHistory is still early, and some of the most interesting work is ahead of us. We'd especially welcome help with:
+
+- **Exploring what's possible on Windows.** Investigate native activity collection, privacy boundaries, packaging, and which parts of the current macOS architecture can be shared.
+- **Improving the local model.** Design an opt-in, privacy-preserving way for people to contribute human-corrected training examples for a future LoRA-based local model—without uploading raw activity logs.
+- **Performance and battery life.** Measure and reduce the cost of running OpenHistory throughout the workday.
+- **More agent integrations.** Improve the MCP experience across local agents and find useful new ways for them to work with personal history safely.
+- **Privacy, accessibility, and app coverage.** Test unfamiliar macOS setups, strengthen protected-surface detection, and make onboarding work well for more people.
+- **You name it.** If you see a better workflow, a missing safeguard, or a surprising use for OpenHistory, we'd like to hear it.
+
+Start with the [contributing guide](CONTRIBUTING.md), or [open an issue](https://github.com/ztratar/openhistory/issues/new/choose) to propose an idea before building it.
+
 ## Development
 
 ```bash
