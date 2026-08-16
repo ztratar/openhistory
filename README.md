@@ -118,6 +118,48 @@ Richer context requires macOS Accessibility permission. In OpenHistory, open **S
 native/collector/.build/debug/OpenHistory Collector.app
 ```
 
+## Architecture
+
+```text
+macOS Accessibility APIs
+          │
+          ▼
+Swift collector ──► permission-restricted JSONL
+          │
+          ▼
+Electron main process ──► deterministic episodes
+          │                      │
+          │                      ▼ automatic update
+          │          selected inference provider
+          │                      │
+          ▼                      ▼
+React UI ◄──────── timeline + hour + daily-rollup indexes
+                                 │
+                                 ▼ sanitized projection
+                     authenticated local MCP server
+```
+
+The renderer is sandboxed and communicates through a narrow typed preload bridge. Structured model outputs are validated before persistence. Raw events, indexes, Markdown, settings, and agent credentials are restricted to the current macOS user.
+
+Inference inputs, prompts, schemas, limits, providers, and the native worker protocol are versioned and covered by preservation tests. See [the inference architecture](docs/architecture/inference.md) and [model-quality methodology](MODEL_QUALITY.md).
+
+## Privacy model
+
+- Collection can be paused at any time.
+- When automatic summaries are enabled and the selected provider has an API key, completed episode evidence is sent directly to that provider about every 10 minutes.
+- Chat requests send the conversation and relevant retrieved evidence to the configured cloud provider; questions about very recent work can include privacy-filtered activity not yet covered by a timeline summary.
+- OpenAI requests use `store: false`; Anthropic and Kimi requests are governed by their respective API data policies.
+- Credentials and credential-shaped text are redacted before persistence or projection.
+- Raw activity is excluded from the MCP projection.
+- Agent credentials are random, independently revocable, and stored only as SHA-256 hashes.
+- The MCP server binds to `127.0.0.1`, requires bearer authentication, and rejects non-local browser origins.
+
+See the complete [privacy policy](PRIVACY.md) and [SECURITY.md](SECURITY.md) for reporting security issues. Startup automatically removes historical protected activity and invalid derived summaries. To run that raw-event scrub manually, use:
+
+```bash
+npm run privacy:scrub-protected -- "/path/to/activity-data"
+```
+
 ## Local agent access
 
 In **Settings**, choose **Copy prompt** and paste it into your local coding agent. OpenHistory creates a dedicated, independently revocable credential for that connection. Credentials are sent in the `Authorization` header and are never placed in the MCP URL.

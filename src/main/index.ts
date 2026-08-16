@@ -337,7 +337,7 @@ async function initialize(): Promise<void> {
     collector.setEnabled(Boolean(enabled));
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.updateCollectionSettings, (_event, settings: CollectionSettings) => {
+  ipcMain.handle(IPC_CHANNELS.updateCollectionSettings, async (_event, settings: CollectionSettings) => {
     const current = settingsStore.load();
     const saved = settingsStore.save({
       ...settings,
@@ -347,6 +347,27 @@ async function initialize(): Promise<void> {
     });
     nativeTheme.themeSource = saved.appearanceMode;
     collector.setSettings(saved);
+    const privacyBecameMoreRestrictive =
+      (current.captureEmailActivity && !saved.captureEmailActivity) ||
+      (current.captureMessagingActivity && !saved.captureMessagingActivity);
+    if (privacyBecameMoreRestrictive) {
+      if (historyBuildPromise) await historyBuildPromise;
+      const privacyReconciliation = reconcileProtectedHistory(
+        config.dataDirectory,
+        timelineStore,
+        hourStore,
+        dailyRollupStore,
+        {
+          captureEmailActivity: saved.captureEmailActivity,
+          captureMessagingActivity: saved.captureMessagingActivity
+        }
+      );
+      if (Object.values(privacyReconciliation).some((count) => count > 0)) {
+        console.info("Removed newly protected activity from local history", privacyReconciliation);
+      }
+      sendDerivedState();
+      buildHistoryIfNeeded();
+    }
     return bootstrapState();
   });
   ipcMain.handle(IPC_CHANNELS.updateInferenceSettings, async (_event, next: InferenceSettings) => {
