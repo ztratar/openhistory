@@ -1,0 +1,210 @@
+{
+  "version": 1,
+  "description": "Synthetic public fixture covering timeline, hour, and day generation paths without captured user data.",
+  "episode": {
+    "id": "synthetic-episode",
+    "startTime": "2026-01-12T17:02:00.000Z",
+    "endTime": "2026-01-12T17:11:00.000Z",
+    "applications": [
+      {
+        "bundleIdentifier": "org.example.Editor",
+        "localizedName": "Example Editor",
+        "processIdentifier": 42
+      }
+    ],
+    "events": [
+      {
+        "version": 1,
+        "id": "synthetic-event-1",
+        "timestamp": "2026-01-12T17:02:00.000Z",
+        "kind": "application_activated",
+        "application": {
+          "bundleIdentifier": "org.example.Editor",
+          "localizedName": "Example Editor",
+          "processIdentifier": 42
+        },
+        "windowTitle": "Timeline preferences"
+      },
+      {
+        "version": 1,
+        "id": "synthetic-event-2",
+        "timestamp": "2026-01-12T17:04:00.000Z",
+        "kind": "text_input",
+        "application": {
+          "bundleIdentifier": "org.example.Editor",
+          "localizedName": "Example Editor",
+          "processIdentifier": 42
+        },
+        "windowTitle": "timeline-spec.md",
+        "document": {
+          "displayPath": "docs/timeline-spec.md",
+          "name": "timeline-spec.md",
+          "fileExtension": "md"
+        },
+        "element": {
+          "role": "AXTextArea",
+          "title": "Specification editor"
+        },
+        "textChange": {
+          "insertedText": "Draft an expandable hour timeline with a twelve pixel indent.",
+          "deletedCharacterCount": 0,
+          "resultingValue": "Draft an expandable hour timeline with a twelve pixel indent."
+        }
+      },
+      {
+        "version": 1,
+        "id": "synthetic-event-3",
+        "timestamp": "2026-01-12T17:08:00.000Z",
+        "kind": "pointer_click",
+        "application": {
+          "bundleIdentifier": "org.example.Editor",
+          "localizedName": "Example Editor",
+          "processIdentifier": 42
+        },
+        "windowTitle": "timeline-spec.md",
+        "element": {
+          "role": "AXButton",
+          "title": "Save"
+        },
+        "document": {
+          "displayPath": "docs/timeline-spec.md",
+          "name": "timeline-spec.md",
+          "fileExtension": "md"
+        }
+      },
+      {
+        "version": 1,
+        "id": "synthetic-event-4",
+        "timestamp": "2026-01-12T17:11:00.000Z",
+        "kind": "document_changed",
+        "application": {
+          "bundleIdentifier": "org.example.Editor",
+          "localizedName": "Example Editor",
+          "processIdentifier": 42
+        },
+        "document": {
+          "displayPath": "docs/timeline-spec.md",
+          "name": "timeline-spec.md",
+          "fileExtension": "md"
+        }
+      }
+    ]
+  },
+  "timelineItems": [
+    {
+      "version": 1,
+      "id": "synthetic-timeline-1",
+      "startTime": "2026-01-12T17:02:00.000Z",
+      "endTime": "2026-01-12T17:11:00.000Z",
+      "title": "Drafted expandable timeline specification",
+      "description": "Drafted and saved a specification for expandable hour rows with a twelve pixel indent.",
+      "applications": [{ "bundleIdentifier": "org.example.Editor", "name": "Example Editor" }],
+      "workThreads": ["Timeline hierarchy"],
+      "decisions": ["Use a twelve pixel indent"],
+      "outcomes": ["Saved timeline-spec.md"],
+      "blockers": [],
+      "surfaces": ["timeline-spec.md"],
+      "links": [{ "label": "Pull Request #4", "url": "https://github.com/example/openhistory/pull/4" }],
+      "suggestion": null,
+      "sourceEventIds": ["synthetic-event-1", "synthetic-event-2", "synthetic-event-3", "synthetic-event-4"]
+    },
+    {
+      "version": 1,
+      "id": "synthetic-timeline-2",
+      "startTime": "2026-01-12T17:20:00.000Z",
+      "endTime": "2026-01-12T17:28:00.000Z",
+      "title": "Verified timeline fixture",
+      "description": "Ran the synthetic timeline fixture and verified its deterministic evidence output.",
+      "applications": [{ "bundleIdentifier": "org.example.Terminal", "name": "Example Terminal" }],
+      "workThreads": ["Inference verification"],
+      "decisions": [],
+      "outcomes": ["Fixture passed"],
+      "blockers": [],
+      "surfaces": ["preservation-v1.json"],
+      "suggestion": null,
+      "sourceEventIds": ["synthetic-event-5"]
+    }
+  ],
+  "lastHour": {
+    "version": 1,
+    "id": "2026-01-12T16:00:00.000Z",
+    "startTime": "2026-01-12T16:00:00.000Z",
+    "endTime": "2026-01-12T17:00:00.000Z",
+    "title": "Outlined timeline preservation plan",
+    "summary": "- Identified the model paths requiring characterization.\n- Kept planned work separate from verified outcomes.",
+    "applications": [],
+    "workThreads": ["Inference verification"],
+    "decisions": ["Use synthetic public fixtures"],
+    "outcomes": [],
+    "blockers": [],
+    "surfaces": [],
+    "sourceTimelineIds": ["synthetic-prior-timeline"],
+    "sourceTimelineRevisions": ["synthetic-prior-revision"],
+    "updatedAt": "2026-01-12T17:01:00.000Z"
+  },
+  "currentHour": {
+    "version": 1,
+    "id": "2026-01-12T17:00:00.000Z",
+    "startTime": "2026-01-12T17:00:00.000Z",
+    "endTime": "2026-01-12T18:00:00.000Z",
+    "title": "Drafted expandable timeline specification",
+    "summary": "- Drafted and saved the expandable timeline specification.",
+    "applications": [],
+    "workThreads": ["Timeline hierarchy"],
+    "decisions": ["Use a twelve pixel indent"],
+    "outcomes": ["Saved timeline-spec.md"],
+    "blockers": [],
+    "surfaces": ["timeline-spec.md"],
+    "links": [{ "label": "Pull Request #4", "url": "https://github.com/example/openhistory/pull/4" }],
+    "sourceTimelineIds": ["synthetic-timeline-1"],
+    "sourceTimelineRevisions": ["synthetic-revision-1"],
+    "updatedAt": "2026-01-12T18:01:00.000Z"
+  },
+  "existingDailyRollup": {
+    "version": 2,
+    "id": "2026-01-12",
+    "date": "2026-01-12",
+    "title": "Planned inference preservation work",
+    "summary": "- Planned a behavior-preserving inference refactor.",
+    "themes": ["Inference preservation"],
+    "accomplishments": [],
+    "decisions": ["Keep fixtures synthetic"],
+    "unfinishedWork": ["Implement characterization tests"],
+    "recurringPatterns": [],
+    "sourceTimelineIds": ["synthetic-prior-timeline"],
+    "sourceTimelineRevisions": ["synthetic-prior-revision"],
+    "updatedAt": "2026-01-12T16:30:00.000Z"
+  },
+  "replayOutputs": {
+    "timeline_entry_compact": {
+      "title": "Drafted expandable timeline specification",
+      "description": "Drafted and saved a synthetic specification for expandable hour rows.",
+      "workThreads": [],
+      "decisions": [],
+      "outcomes": [],
+      "blockers": [],
+      "surfaces": [],
+      "suggestion": null
+    },
+    "hour_rollup_compact": {
+      "title": "Drafted and verified timeline fixtures",
+      "summary": "- Drafted a synthetic expandable timeline specification in Pull Request #4.\n- Verified deterministic fixture output.",
+      "workThreads": [],
+      "decisions": [],
+      "outcomes": [],
+      "blockers": [],
+      "surfaces": [],
+      "linkReferences": ["link-1"]
+    },
+    "daily_rollup_compact": {
+      "title": "Prepared inference preservation fixtures",
+      "summary": "- Drafted and saved a synthetic timeline specification in Pull Request #4.\n- Verified deterministic inference request construction.",
+      "themes": [],
+      "accomplishments": [],
+      "decisions": [],
+      "unfinishedWork": [],
+      "recurringPatterns": [],
+      "linkReferences": ["link-1"]
+    }
+  }
+}

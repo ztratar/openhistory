@@ -1,0 +1,54 @@
+name: Model quality regression
+description: Report a factual, structural, or performance regression using synthetic evidence.
+title: "[Model quality]: "
+labels: ["model-quality"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach raw activity logs, credentials, private prompts, or personal model output. Reduce the problem to synthetic evidence.
+  - type: dropdown
+    id: task
+    attributes:
+      label: Task
+      options: [Timeline, Hour, Day]
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options: [Apple on-device, OpenAI, Anthropic, Kimi]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Input and prompt version
+      placeholder: e8-final-state / apple-timeline-v1
+    validations:
+      required: true
+  - type: textarea
+    id: synthetic-evidence
+    attributes:
+      label: Minimal synthetic evidence
+      description: Replace names, text, URLs, file paths, and identifiers with invented values.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Observed and expected result
+    validations:
+      required: true
+  - type: input
+    id: performance
+    attributes:
+      label: Performance details, if relevant
+      placeholder: hardware, macOS, model, p50/p95, sample count
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: This report contains only synthetic or fully sanitized data.
+          required: true

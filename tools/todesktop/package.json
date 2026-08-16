@@ -1,0 +1,14 @@
+{
+  "name": "openhistory-todesktop-toolchain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pinned, isolated release tooling for OpenHistory's ToDesktop spike.",
+  "devDependencies": {
+    "@todesktop/cli": "1.28.0"
+  },
+  "overrides": {
+    "@todesktop/cli": {
+      "fast-uri": "3.1.5"
+    }
+  }
+}

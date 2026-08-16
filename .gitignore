@@ -1,0 +1,40 @@
+node_modules/
+out/
+dist/
+release/
+.todesktop/
+.worktrees/
+.DS_Store
+
+# Local configuration and secrets
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+*.swp
+*.swo
+
+# Local activity and rollup data
+.local-data/
+activity-data/
+memories/
+daily-rollups/
+*.jsonl
+fixtures/inference/private/
+reports/private/
+reports/*-latest.md
+reports/*-latest-metrics.json
+
+# Private Apple adapter research artifacts
+adapter_training_toolkit*/
+*.fmadapter/
+*.pt
+*.pth
+**/training/venv/
+**/training/*.log
+
+# Swift build products
+native/collector/.build/
+native/collector/.swiftpm/
+.swift-cache/

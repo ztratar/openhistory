@@ -1,0 +1,96 @@
+{
+  "name": "openhistory",
+  "productName": "OpenHistory",
+  "version": "0.2.0",
+  "private": true,
+  "author": "Zach Tratar <955182+ztratar@users.noreply.github.com>",
+  "license": "Apache-2.0",
+  "description": "A private, local-first work timeline with daily rollups for macOS.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ztratar/openhistory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ztratar/openhistory/issues"
+  },
+  "homepage": "https://github.com/ztratar/openhistory#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "npm@10.9.3",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "build": {
+    "mac": {
+      "icon": "resources/OpenHistory.icns"
+    },
+    "extraResources": [
+      {
+        "from": "resources/openhistory-icon.png",
+        "to": "openhistory-icon.png"
+      }
+    ]
+  },
+  "scripts": {
+    "dev": "npm run build:native && electron-vite dev",
+    "build": "npm run build:native && npm run build:electron",
+    "build:electron": "electron-vite build",
+    "build:native": "npm run build:native:swift && npm run package:native",
+    "build:native:swift": "CLANG_MODULE_CACHE_PATH=$PWD/.swift-cache/clang SWIFTPM_MODULECACHE_OVERRIDE=$PWD/.swift-cache/swift swift build --disable-sandbox --package-path native/collector --configuration debug",
+    "package:native": "sh native/collector/scripts/package-app.sh debug",
+    "package:native:release": "sh native/collector/scripts/package-release-app.sh host adhoc",
+    "package:native:todesktop": "sh native/collector/scripts/package-release-app.sh universal adhoc",
+    "test": "npm run typecheck && npm run test:ts && npm run test:inference-preservation && npm run test:native && npm run test:distribution",
+    "check": "npm test && npm run check:public && npm run build",
+    "test:ts": "tsx --test src/main/*.test.ts",
+    "test:inference-preservation": "node --import tsx scripts/check-inference-preservation.ts",
+    "test:distribution": "node --import tsx scripts/verify-todesktop-spike.ts",
+    "check:public": "node --import tsx scripts/check-public-repository.ts",
+    "export:public-snapshot": "node --import tsx scripts/export-public-snapshot.ts",
+    "test:native": "CLANG_MODULE_CACHE_PATH=$PWD/.swift-cache/clang SWIFTPM_MODULECACHE_OVERRIDE=$PWD/.swift-cache/swift swift test --disable-sandbox --package-path native/collector",
+    "benchmark:events": "node --import tsx scripts/benchmark-events.ts",
+    "benchmark:apple-model": "node --import tsx scripts/benchmark-apple-foundation-model.ts",
+    "adapter:export-pilot": "node --import tsx scripts/export-apple-adapter-pilot.ts",
+    "adapter:benchmark-pilot": "node --import tsx scripts/benchmark-apple-adapter-pilot.ts",
+    "adapter:train-pilot": "node --import tsx scripts/train-apple-adapter-pilot.ts",
+    "experiment:inference": "node --import tsx scripts/experiment-inference-input.ts",
+    "privacy:scrub-protected": "node --import tsx scripts/scrub-protected-events.ts",
+    "typecheck": "tsc --noEmit",
+    "preview": "electron-vite preview",
+    "desktop:tools": "npm ci --prefix tools/todesktop",
+    "desktop:verify": "npm run build:electron && npm run package:native:release && npm run package:native:todesktop && node --import tsx scripts/verify-todesktop-spike.ts --native-bundle && node --import tsx scripts/test-todesktop-before-build.ts && node --import tsx scripts/test-todesktop-after-pack.ts",
+    "desktop:package:local": "npm run build:electron && node --import tsx scripts/package-local-app.ts",
+    "desktop:dry-run": "npm run build:electron && npm run package:native:todesktop && node tools/todesktop/node_modules/@todesktop/cli/dist/cli.js build --dry-run --files",
+    "desktop:build": "node scripts/require-todesktop-credentials.cjs && npm run build:electron && npm run package:native:todesktop && node tools/todesktop/node_modules/@todesktop/cli/dist/cli.js build --ephemeral --follow-logs",
+    "desktop:smoke-test": "node scripts/require-todesktop-credentials.cjs && node tools/todesktop/node_modules/@todesktop/cli/dist/cli.js smoke-test --ephemeral --latest",
+    "desktop:verify:signed": "sh scripts/verify-signed-macos-app.sh",
+    "desktop:release": "node scripts/require-todesktop-credentials.cjs && node tools/todesktop/node_modules/@todesktop/cli/dist/cli.js release --ephemeral --latest",
+    "todesktop:beforeBuild": "./scripts/todesktop-before-build.cjs",
+    "todesktop:afterPack": "./scripts/todesktop-after-pack.cjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@todesktop/runtime": "2.1.4",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "openai": "^7.4.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@electron/fuses": "2.1.3",
+    "@electron/packager": "20.3.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "43.4.0",
+    "electron-vite": "^5.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6"
+  }
+}

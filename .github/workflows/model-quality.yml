@@ -1,0 +1,45 @@
+name: Trusted model quality
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 10 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  apple-shadow-evaluation:
+    if: github.repository_owner == 'ztratar'
+    runs-on: [self-hosted, macOS, ARM64, openhistory-model-eval]
+    timeout-minutes: 90
+    env:
+      OPENHISTORY_EVAL_DATA_DIR: ${{ vars.OPENHISTORY_EVAL_DATA_DIR }}
+      OPENHISTORY_MODEL_BASELINE_PATH: ${{ vars.OPENHISTORY_MODEL_BASELINE_PATH }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENHISTORY_EVAL_MODEL }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Validate trusted evaluation configuration
+        run: |
+          test -n "$OPENHISTORY_EVAL_DATA_DIR"
+          test -d "$OPENHISTORY_EVAL_DATA_DIR"
+          test -n "$OPENHISTORY_MODEL_BASELINE_PATH"
+          test -f "$OPENHISTORY_MODEL_BASELINE_PATH"
+      - run: npm run build:native
+      - run: npm run test:inference-preservation
+      - name: Run non-destructive Apple shadow evaluation
+        run: npm run benchmark:apple-model -- "$OPENHISTORY_EVAL_DATA_DIR" reports/apple-foundation-model-quality-latest.md 40 8 20 --cloud-judge
+      - uses: actions/upload-artifact@v6
+        with:
+          name: apple-model-quality-report
+          path: |
+            reports/apple-foundation-model-quality-latest.md
+            reports/apple-foundation-model-quality-latest-metrics.json
+          if-no-files-found: error
+          retention-days: 30

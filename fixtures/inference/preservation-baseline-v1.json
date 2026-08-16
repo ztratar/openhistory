@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "fixtureVersion": 1,
+  "taskManifest": {
+    "timeline": {
+      "apple": {
+        "inputVersion": "e9-submission-actions",
+        "promptVersion": "apple-timeline-v1",
+        "schemaName": "timeline_entry_compact",
+        "schemaVersion": "timeline-draft-v1",
+        "normalizationVersion": "apple-normalization-v2",
+        "maxOutputTokens": 550
+      },
+      "cloud": {
+        "inputVersion": "hybrid-evidence-v4",
+        "promptVersion": "cloud-timeline-v4",
+        "schemaName": "timeline_entry",
+        "schemaVersion": "timeline-draft-v1",
+        "normalizationVersion": "provider-native-zod-v1",
+        "maxOutputTokens": 1200
+      }
+    },
+    "hour": {
+      "apple": {
+        "inputVersion": "h2-semantic-link-candidates",
+        "promptVersion": "apple-hour-v2",
+        "schemaName": "hour_rollup_compact",
+        "schemaVersion": "hour-draft-v2",
+        "normalizationVersion": "apple-normalization-v2",
+        "maxOutputTokens": 650
+      },
+      "cloud": {
+        "inputVersion": "hybrid-link-candidates-v3",
+        "promptVersion": "cloud-hour-v3",
+        "schemaName": "hour_rollup",
+        "schemaVersion": "hour-draft-v2",
+        "normalizationVersion": "provider-native-zod-v1",
+        "maxOutputTokens": 1300
+      }
+    },
+    "day": {
+      "apple": {
+        "inputVersion": "d3-semantic-link-candidates",
+        "promptVersion": "apple-day-v2",
+        "schemaName": "daily_rollup_compact",
+        "schemaVersion": "daily-rollup-draft-v3",
+        "normalizationVersion": "apple-normalization-v2",
+        "maxOutputTokens": 750
+      },
+      "cloud": {
+        "inputVersion": "semantic-link-candidates-v3",
+        "promptVersion": "cloud-day-v4",
+        "schemaName": "daily_rollup",
+        "schemaVersion": "daily-rollup-draft-v3",
+        "normalizationVersion": "provider-native-zod-v1",
+        "maxOutputTokens": 1600
+      }
+    }
+  },
+  "artifacts": {
+    "timeline.apple": {
+      "sha256": "30a0442e1e5cf8ea128d041e2b95e719816c0d77590fc5d8b67fe32659230a6b",
+      "inputCharacters": 863,
+      "instructionCharacters": 567,
+      "maximumInputCharacters": 907
+    },
+    "timeline.cloud": {
+      "sha256": "3cac0e2fccaafeda2fc4cf2af5f139c10fa5941c141a8971036b3c45a6aea1af",
+      "inputCharacters": 2774,
+      "instructionCharacters": 6693,
+      "maximumInputCharacters": 2913
+    },
+    "hour.apple": {
+      "sha256": "69396d790940ac69858e33faa285816348d5f12391ecd244f1472350a6b7abf3",
+      "inputCharacters": 901,
+      "instructionCharacters": 652,
+      "maximumInputCharacters": 947
+    },
+    "hour.cloud": {
+      "sha256": "34318447262ac32124afa7e6e8b0382511a3fe148623c62d886973d5daa7074e",
+      "inputCharacters": 1275,
+      "instructionCharacters": 4541,
+      "maximumInputCharacters": 1339
+    },
+    "day.apple": {
+      "sha256": "e003df57e72b8c504dd39c422e053d51d3ea97a52abab1ce31355926c36f871e",
+      "inputCharacters": 941,
+      "instructionCharacters": 744,
+      "maximumInputCharacters": 989
+    },
+    "day.cloud": {
+      "sha256": "085eb62aa5082728a722dd4ef9109783ea6c841d8c08605ffc7a47e002d26e19",
+      "inputCharacters": 1454,
+      "instructionCharacters": 4214,
+      "maximumInputCharacters": 1527
+    }
+  }
+}
