@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "private": true,
   "author": "Zach Tratar <955182+ztratar@users.noreply.github.com>",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "description": "A private, local-first work timeline with daily rollups for macOS.",
   "repository": {
     "type": "git",

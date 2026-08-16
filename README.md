@@ -1,171 +1,148 @@
-# OpenHistory
+<p align="center">
+  <img src="resources/openhistory-icon.png" width="128" alt="OpenHistory icon">
+</p>
 
-OpenHistory is a private, local-first work timeline for macOS. It observes permitted application activity, turns completed work sessions into structured summaries, rolls closed clock hours into persistent summaries, builds daily rollups, and makes a sanitized projection available to local AI agents over MCP.
+<h1 align="center">OpenHistory</h1>
 
-The app is under active development. It currently runs from source on macOS 14 or later.
+<p align="center">
+  <strong>A private, searchable timeline of what you worked on.</strong>
+</p>
 
-## What it does
+<p align="center">
+  <a href="https://openhistory.sh"><strong>openhistory.sh</strong></a>
+</p>
 
-- records foreground application and accessibility activity to local, append-only JSONL;
-- groups activity deterministically into bounded work episodes;
-- builds timeline, closed-hour, and daily summaries automatically about every 12 minutes;
-- keeps exact local provenance for every generated timeline entry;
-- exposes a read-only, redacted projection through an authenticated loopback MCP server.
+<p align="center">
+  <a href="https://openhistory.sh"><img src="https://img.shields.io/badge/Download_for_Mac-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download OpenHistory for Mac"></a>
+</p>
 
-OpenHistory does not record screenshots, audio, or low-level key events. It excludes secure and password-labeled fields, private browser windows, recognized adult websites, and recognized messaging and password apps. Email activity is excluded by default and can be enabled in Settings. Enabled email or text-edit capture can contain sensitive text, so treat the local data directory as private.
+<p align="center">
+  <a href="https://github.com/ztratar/openhistory/actions/workflows/ci.yml"><img src="https://github.com/ztratar/openhistory/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple" alt="macOS 14 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <img src="website/public/openhistory-hero.png" width="900" alt="OpenHistory showing a private work timeline on macOS">
+</p>
+
+OpenHistory turns activity you permit on your Mac into a private record of your work. It builds a timeline, creates hourly and daily summaries, and gives approved local AI agents a controlled way to answer questions about what you did.
+
+OpenHistory is under active development. It runs on macOS 14 or later and is currently installed from source.
+
+## Why OpenHistory?
+
+Work gets scattered across editors, browsers, terminals, documents, and issue trackers. By the end of the day, it can be surprisingly hard to remember what moved forward—or where you left off.
+
+OpenHistory leaves you with a useful memory of the day without taking screenshots or recording every keystroke. You can use it to answer questions like:
+
+> What did I finish yesterday?
+>
+> Where did I leave that release task?
+>
+> What work is still unfinished?
+
+## What you get
+
+- **An automatic work timeline.** Permitted foreground activity is grouped into clear work summaries.
+- **Hourly and daily recaps.** OpenHistory turns work summaries into a history you can scan later.
+- **Searchable out of the box.** Find past work immediately with built-in history search.
+- **Choose your own inference.** Use Apple's experimental on-device model for maximum privacy—or connect OpenAI, Anthropic, or Kimi. Or simply turn off automatic summaries to keep just your logs.
+- **Controlled agent access.** Local AI tools can search a redacted, read-only view through an authenticated MCP server.
+
+## Privacy at a glance
+
+| | OpenHistory behavior |
+| --- | --- |
+| **What it records** | Foreground application activity and permitted accessibility changes needed to create work summaries. |
+| **What it never records** | Screenshots, audio, or individual key events. Password fields, private browser windows, and protected apps and websites are excluded. |
+| **Where data lives** | Raw activity, summaries, settings, and agent credentials stay in a permission-restricted local data directory. |
+| **When cloud models receive data** | Only after you choose a cloud provider, supply its key, and accept the provider-specific transmission disclosure. |
+| **What agents can see** | A redacted projection—not the raw activity log—served over loopback with bearer authentication. |
+
+Collection can be paused at any time. **Settings → Data & privacy → Delete all local data** removes recorded activity, summaries, settings, saved keys, and agent connections.
+
+Accessibility and optional email capture can include sensitive text, so the local data directory should still be treated as private. Read the full [privacy policy](PRIVACY.md) and [security policy](SECURITY.md) before using OpenHistory with sensitive work.
 
 ## Quick start
 
-Requirements:
+### Requirements
 
 - macOS 14 or later
 - Node.js 22
 - Xcode with Swift 6.1 or later
-- Apple Intelligence on macOS 26 or later for on-device summaries, or an OpenAI, Anthropic, or Kimi API key (all optional)
+- For summaries: Apple Intelligence on macOS 26 or later, or an OpenAI, Anthropic, or Kimi API key
 
 ```bash
 git clone https://github.com/ztratar/openhistory.git
 cd openhistory
-npm install
-cp .env.example .env.local
+npm ci
 npm run dev
 ```
 
-Choose an inference provider and model in the app's **Settings** tab. Apple's experimental on-device provider requires no API key and never sends evidence off the Mac. Cloud providers require their own key. Automatic summaries can also be turned off while local activity collection continues. As an alternative to saving a cloud key, use the ignored `.env.local` file as a fallback:
+On first launch, OpenHistory keeps collection paused until you accept the privacy notice. You will then choose how summaries should work:
 
-On first launch, collection remains paused until the privacy notice is accepted. OpenHistory then requires a summary model choice before opening the timeline: Apple On-Device continues without a key, while every cloud choice requires a provider key and an explicit transmission disclosure. Saving a key or setting an environment variable outside onboarding is not consent by itself.
+- **Apple On-Device** keeps evidence on the Mac and requires no API key.
+- **A cloud provider** requires its own API key and an explicit transmission disclosure.
+- **Summaries off** keeps local collection running without model-generated timeline entries.
 
-```dotenv
-OPENAI_API_KEY=your_key_here
-OPENAI_MODEL=gpt-5.6-luna
+Keys entered in Settings are encrypted separately for each provider using macOS-backed Electron secure storage. They are never returned to the renderer, collector, or MCP clients.
 
-# Or use Anthropic
-ANTHROPIC_API_KEY=your_key_here
-ANTHROPIC_MODEL=claude-sonnet-5
+<details>
+<summary>Using environment variables instead of Settings</summary>
 
-# Or use Kimi (Moonshot AI)
-MOONSHOT_API_KEY=your_key_here
-MOONSHOT_MODEL=kimi-k3
+Copy the example file and add only the provider you want:
+
+```bash
+cp .env.example .env.local
 ```
 
-Keys saved in Settings are encrypted separately for each provider with macOS-backed Electron secure storage and override that provider's environment fallback. Saved keys are not returned to the renderer or exposed to the native collector or MCP clients.
+OpenHistory reads ignored local environment files as a fallback. Supplying a key does not itself grant consent or enable cloud transmission; onboarding still requires the matching provider disclosure.
 
-### Accessibility
+</details>
 
-Richer context requires macOS Accessibility permission. Open **Settings** in OpenHistory and choose **Grant access**. The development collector has a stable local permission identity at:
+### Accessibility permission
+
+Richer context requires macOS Accessibility permission. In OpenHistory, open **Settings** and choose **Grant access**. The development collector has a stable local permission identity at:
 
 ```text
 native/collector/.build/debug/OpenHistory Collector.app
 ```
 
-## Architecture
-
-```text
-macOS Accessibility APIs
-          │
-          ▼
-Swift collector ──► permission-restricted JSONL
-          │
-          ▼
-Electron main process ──► deterministic episodes
-          │                      │
-          │                      ▼ automatic update
-          │          selected inference provider
-          │                      │
-          ▼                      ▼
-React UI ◄──────── timeline + hour + daily-rollup indexes
-                                 │
-                                 ▼ sanitized projection
-                     authenticated local MCP server
-```
-
-The renderer is sandboxed and communicates through a narrow typed preload bridge. Structured model outputs are validated before persistence. Raw events, indexes, Markdown, settings, and agent credentials are restricted to the current macOS user.
-
-Inference inputs, prompts, schemas, limits, providers, and the native worker protocol are versioned and covered by preservation tests. See [the inference architecture](docs/architecture/inference.md) and [model-quality methodology](MODEL_QUALITY.md).
-
-## Privacy model
-
-- Collection can be paused at any time.
-- When automatic summaries are enabled and the selected provider has an API key, completed episode evidence is sent directly to that provider about every 12 minutes.
-- Chat requests send the conversation and relevant retrieved evidence to the configured cloud provider; questions about very recent work can include privacy-filtered activity not yet covered by a timeline summary.
-- OpenAI requests use `store: false`; Anthropic and Kimi requests are governed by their respective API data policies.
-- Credentials and credential-shaped text are redacted before persistence or projection.
-- Raw activity is excluded from the MCP projection.
-- Agent credentials are random, independently revocable, and stored only as SHA-256 hashes.
-- The MCP server binds to `127.0.0.1`, requires bearer authentication, and rejects non-local browser origins.
-
-See the complete [privacy policy](PRIVACY.md) and [SECURITY.md](SECURITY.md) for reporting security issues. Startup automatically removes historical protected activity and invalid derived summaries. To run that raw-event scrub manually, use:
-
-```bash
-npm run privacy:scrub-protected -- "/path/to/activity-data"
-```
-
 ## Local agent access
 
-Open **Settings** and choose **Copy prompt**. OpenHistory creates a dedicated credential and copies a short configuration prompt for your local coding agent. The credential is placed in the `Authorization` header, never in the MCP URL.
+In **Settings**, choose **Copy prompt** and paste it into your local coding agent. OpenHistory creates a dedicated, independently revocable credential for that connection. Credentials are sent in the `Authorization` header and are never placed in the MCP URL.
 
-The default endpoint is `http://127.0.0.1:47831/openhistory/mcp`. Set `OPENHISTORY_MCP_PORT` in `.env.local` to use a different loopback port.
+The read-only MCP tools can:
 
-Available read-only tools:
+- search your work history;
+- retrieve a day or timeline item;
+- find referenced files, links, and other work surfaces;
+- identify unfinished work.
 
-- `search_history`
-- `get_day`
-- `get_timeline_item`
-- `find_surfaces`
-- `get_unfinished_work`
+The default endpoint is `http://127.0.0.1:47831/openhistory/mcp`.
 
-## Local data
+## Development
 
-OpenHistory uses Electron's per-user application data directory by default. Set `OPENHISTORY_DATA_DIR` to use a different directory during development; for deletion safety, a custom path must end in `activity-data`. OpenHistory refuses to mark an existing, nonempty custom directory as owned unless `OPENHISTORY_ADOPT_DATA_DIR=1` is also set deliberately. Existing installations in the recognized original `local-computer-history` directory continue migrating automatically.
-
-```text
-events-YYYY-MM-DD.jsonl   raw local activity
-timeline/                validated summaries and provenance
-hours/                   validated clock-hour rollups
-daily-rollups/           validated daily rollups
-agent-projection/        redacted agent-facing index
-agent-access.json        credential hashes and access audit
-inference-settings.json selected provider, models, and enabled state
-openai-credential.json  macOS-encrypted OpenAI credential
-anthropic-credential.json macOS-encrypted Anthropic credential
-kimi-credential.json    macOS-encrypted Kimi credential
+```bash
+npm test          # TypeScript and Swift tests
+npm run build     # Native collector and Electron production bundles
+npm run check     # Complete local quality gate
 ```
 
-Raw JSONL remains the source of truth. Timeline items reference their exact source event IDs, while hourly and daily rollups independently reference revisions of verified timeline items. Stale derived data is not shown or sent back to the model. Existing version-1 data in `memory/` is imported into `daily-rollups/` on first launch after upgrading.
-
-Use **Settings > Data & privacy > Delete all local data** to remove raw activity, summaries, settings, saved keys, and agent connections. OpenHistory confirms the action natively and restarts. For a full uninstall, delete local data first, remove the app, then remove its Accessibility permission in System Settings.
-
-## Desktop distribution spike
-
-The repository includes a credential-free ToDesktop Platform spike for signed macOS packaging and updates. It isolates the release CLI from the application dependency tree, builds optimized ARM64/x64 Swift helpers, embeds the collector as a stable nested application before signing, and uses an explicit upload manifest that excludes local data and private evaluation assets. See [the ToDesktop release guide](docs/releasing-todesktop.md).
-
-Build a complete runnable application locally without ToDesktop credentials or an upload:
+To build a complete local application without uploading anything to ToDesktop:
 
 ```bash
 npm run desktop:package:local
 ```
 
-The verified, ad-hoc-signed application is written under `.todesktop/local/`. It contains only compiled application output, production dependencies, the public icon, and the nested release-mode native helper.
+Useful references:
 
-## Development
-
-```bash
-npm test          # typecheck + TypeScript tests + Swift tests
-npm run build     # native collector + Electron production bundles
-npm run check     # complete local quality gate
-npm run test:inference-preservation # exact Apple/cloud task contracts
-```
-
-Deletion tests use only synthetic temporary directories. Never use the live app directory or a private evaluation corpus as a test target. Repository fixtures, private evaluation data, and developer backups must remain outside every configured `activity-data` root.
-
-The event-quality benchmark prints aggregate metrics without captured content:
-
-```bash
-npm run benchmark:events -- "/path/to/activity-data"
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+- [Architecture and inference contracts](docs/architecture/inference.md)
+- [Model-quality methodology](MODEL_QUALITY.md)
+- [ToDesktop release process](docs/releasing-todesktop.md)
+- [Contributing guide](CONTRIBUTING.md)
 
 ## License
 
-OpenHistory is licensed under the [Apache License 2.0](LICENSE).
+OpenHistory is available under the [MIT License](LICENSE).
