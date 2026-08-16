@@ -29,6 +29,7 @@ test("persists normalized collection settings", async (context) => {
     captureDocumentContext: true,
     captureUISnapshots: false,
     captureEmailActivity: true,
+    captureMessagingActivity: true,
     excludedBundleIdentifiers: ["com.example.Secret", "com.example.Secret", "com.example.Chat"]
   };
 
@@ -36,6 +37,7 @@ test("persists normalized collection settings", async (context) => {
   assert.deepEqual(store.load().cloudInferenceConsents, ["anthropic", "openai"]);
   assert.equal(store.load().captureWindowTitles, false);
   assert.equal(store.load().captureEmailActivity, true);
+  assert.equal(store.load().captureMessagingActivity, true);
   assert.equal(store.load().appearanceMode, "dark");
 });
 
@@ -56,6 +58,7 @@ test("migrates the original two-field settings file with semantic defaults", asy
   assert.equal(settings.captureDocumentContext, true);
   assert.equal(settings.captureUISnapshots, true);
   assert.equal(settings.captureEmailActivity, false);
+  assert.equal(settings.captureMessagingActivity, false);
 });
 
 async function testDirectory(context: TestContext): Promise<string> {

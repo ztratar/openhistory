@@ -28,7 +28,8 @@ export class CollectorProcess extends EventEmitter {
     super();
     mkdirSync(dataDirectory, { recursive: true });
     this.recentEvents.push(...loadActivityEvents(dataDirectory, MAX_RECENT_EVENTS, {
-      captureEmailActivity: settings.captureEmailActivity
+      captureEmailActivity: settings.captureEmailActivity,
+      captureMessagingActivity: settings.captureMessagingActivity
     }));
     this.accessibilityTrusted = [...this.recentEvents]
       .reverse()
@@ -61,6 +62,7 @@ export class CollectorProcess extends EventEmitter {
         OPENHISTORY_CAPTURE_DOCUMENT_CONTEXT: String(this.settings.captureDocumentContext),
         OPENHISTORY_CAPTURE_UI_SNAPSHOTS: String(this.settings.captureUISnapshots),
         OPENHISTORY_CAPTURE_EMAIL_ACTIVITY: String(this.settings.captureEmailActivity),
+        OPENHISTORY_CAPTURE_MESSAGING_ACTIVITY: String(this.settings.captureMessagingActivity),
         OPENHISTORY_PROMPT_ACCESSIBILITY: String(this.promptForAccessibilityOnNextStart),
         OPENHISTORY_EXCLUDED_BUNDLE_IDENTIFIERS: this.settings.excludedBundleIdentifiers.join(","),
         OPENHISTORY_EXCLUDED_PROCESS_IDENTIFIERS: String(process.pid)
@@ -72,7 +74,8 @@ export class CollectorProcess extends EventEmitter {
     this.lastNativeSignalAt = Date.now();
     this.startHealthMonitor();
     this.privacyFilter = new ActivityPrivacyFilter({
-      captureEmailActivity: this.settings.captureEmailActivity
+      captureEmailActivity: this.settings.captureEmailActivity,
+      captureMessagingActivity: this.settings.captureMessagingActivity
     });
 
     const lines = createInterface({ input: child.stdout });

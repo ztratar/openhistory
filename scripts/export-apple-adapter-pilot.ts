@@ -19,14 +19,14 @@ const evalSize = integerArgument(process.argv[5], 27);
 const timeline = TimelineItemSchema.array().parse(JSON.parse(
   readFileSync(resolve(dataDirectory, "timeline", "index.json"), "utf8")
 ));
-const captureEmailActivity = storedCaptureEmailActivity();
-const sourceEvents = loadActivityEvents(dataDirectory, undefined, { captureEmailActivity });
-const episodes = segmentActivityEvents(sourceEvents, { captureEmailActivity });
+const privacyOptions = storedPrivacyOptions();
+const sourceEvents = loadActivityEvents(dataDirectory, undefined, privacyOptions);
+const episodes = segmentActivityEvents(sourceEvents, privacyOptions);
 const split = buildAppleTimelineAdapterDataset(timeline, episodes, {
   trainSize,
   evalSize,
   sourceEvents,
-  captureEmailActivity
+  ...privacyOptions
 });
 
 mkdirSync(outputDirectory, { recursive: true, mode: 0o700 });
@@ -98,13 +98,20 @@ function integerArgument(value: string | undefined, fallback: number): number {
   return value === undefined ? fallback : parsed;
 }
 
-function storedCaptureEmailActivity(): boolean {
+function storedPrivacyOptions(): {
+  captureEmailActivity: boolean;
+  captureMessagingActivity: boolean;
+} {
   try {
     const settings = JSON.parse(readFileSync(resolve(dataDirectory, "settings.json"), "utf8")) as {
       captureEmailActivity?: unknown;
+      captureMessagingActivity?: unknown;
     };
-    return settings.captureEmailActivity === true;
+    return {
+      captureEmailActivity: settings.captureEmailActivity === true,
+      captureMessagingActivity: settings.captureMessagingActivity === true
+    };
   } catch {
-    return false;
+    return { captureEmailActivity: false, captureMessagingActivity: false };
   }
 }

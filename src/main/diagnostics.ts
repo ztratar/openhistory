@@ -31,7 +31,8 @@ export function sanitizedDiagnostics(
         browserURLs: state.settings.captureBrowserURLs,
         documentContext: state.settings.captureDocumentContext,
         uiSnapshots: state.settings.captureUISnapshots,
-        emailActivity: state.settings.captureEmailActivity
+        emailActivity: state.settings.captureEmailActivity,
+        messagingActivity: state.settings.captureMessagingActivity
       },
       excludedApplicationCount: state.settings.excludedBundleIdentifiers.length
     },

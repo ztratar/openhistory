@@ -43,10 +43,10 @@ const timeline = TimelineItemSchema.array().parse(JSON.parse(
   readFileSync(resolve(dataDirectory, "timeline", "index.json"), "utf8")
 ));
 const timelineById = new Map(timeline.map((item) => [item.id, item]));
-const captureEmailActivity = storedCaptureEmailActivity();
-const sourceEvents = loadActivityEvents(dataDirectory, undefined, { captureEmailActivity });
+const privacyOptions = storedPrivacyOptions();
+const sourceEvents = loadActivityEvents(dataDirectory, undefined, privacyOptions);
 const sourceEventsById = new Map(sourceEvents.map((event) => [event.id, event]));
-const episodesById = new Map(segmentActivityEvents(sourceEvents, { captureEmailActivity })
+const episodesById = new Map(segmentActivityEvents(sourceEvents, privacyOptions)
   .map((episode) => [episode.id, episode]));
 const cases = manifest.eval.ids.map((id) => {
   const item = timelineById.get(id);
@@ -99,7 +99,7 @@ async function evaluate(
     const started = performance.now();
     let result: AppleAdapterEvaluationResult;
     try {
-      const generated = await service.summarizeEpisode(entry.episode, { captureEmailActivity });
+      const generated = await service.summarizeEpisode(entry.episode, privacyOptions);
       result = {
         id: entry.item.id,
         target: target(entry.item),
@@ -180,13 +180,21 @@ function reconstructEpisode(
   };
 }
 
-function storedCaptureEmailActivity(): boolean {
+function storedPrivacyOptions(): {
+  captureEmailActivity: boolean;
+  captureMessagingActivity: boolean;
+} {
   try {
-    return (JSON.parse(readFileSync(resolve(dataDirectory, "settings.json"), "utf8")) as {
+    const settings = JSON.parse(readFileSync(resolve(dataDirectory, "settings.json"), "utf8")) as {
       captureEmailActivity?: unknown;
-    }).captureEmailActivity === true;
+      captureMessagingActivity?: unknown;
+    };
+    return {
+      captureEmailActivity: settings.captureEmailActivity === true,
+      captureMessagingActivity: settings.captureMessagingActivity === true
+    };
   } catch {
-    return false;
+    return { captureEmailActivity: false, captureMessagingActivity: false };
   }
 }
 

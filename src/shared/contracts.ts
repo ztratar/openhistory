@@ -194,6 +194,7 @@ export interface CollectionSettings {
   captureDocumentContext: boolean;
   captureUISnapshots: boolean;
   captureEmailActivity: boolean;
+  captureMessagingActivity: boolean;
   excludedBundleIdentifiers: string[];
 }
 
@@ -306,4 +307,6 @@ export interface InferenceOnboardingSelection {
   provider: InferenceProvider;
   model: string;
   apiKey?: string;
+  captureEmailActivity?: boolean;
+  captureMessagingActivity?: boolean;
 }

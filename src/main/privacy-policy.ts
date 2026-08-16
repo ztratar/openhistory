@@ -17,10 +17,8 @@ const MAIL_WEB_DOMAINS = new Set([
   "app.fastmail.com"
 ]);
 
-export const ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS = new Set([
+export const MESSAGING_BUNDLE_IDENTIFIERS = new Set([
   "com.apple.MobileSMS",
-  "com.apple.UserNotificationCenter",
-  "com.apple.notificationcenterui",
   "com.tinyspeck.slackmacgap",
   "com.microsoft.teams",
   "com.microsoft.teams2",
@@ -28,7 +26,12 @@ export const ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS = new Set([
   "net.whatsapp.WhatsApp",
   "org.whispersystems.signal-desktop",
   "ru.keepcoder.Telegram",
-  "org.telegram.desktop",
+  "org.telegram.desktop"
+]);
+
+export const ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS = new Set([
+  "com.apple.UserNotificationCenter",
+  "com.apple.notificationcenterui",
   "com.1password.1password",
   "com.agilebits.onepassword7",
   "com.apple.Passwords",
@@ -51,6 +54,18 @@ const BROWSER_BUNDLE_IDENTIFIERS = new Set([
   "company.thebrowser.Browser",
   "com.vivaldi.Vivaldi",
   "com.operasoftware.Opera"
+]);
+
+const MESSAGING_WEB_DOMAINS = new Set([
+  "messages.google.com",
+  "app.slack.com",
+  "chat.google.com",
+  "teams.microsoft.com",
+  "discord.com",
+  "web.whatsapp.com",
+  "web.telegram.org",
+  "messenger.com",
+  "chat.reddit.com"
 ]);
 
 const ADULT_WEB_DOMAINS = new Set(privacyPolicyData.adultWebDomains.map(normalizeDomain));
@@ -108,11 +123,13 @@ export function isSensitiveTextField(element: SemanticElement | undefined): bool
 
 export const PROTECTED_BUNDLE_IDENTIFIERS = new Set([
   ...ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS,
+  ...MESSAGING_BUNDLE_IDENTIFIERS,
   ...MAIL_BUNDLE_IDENTIFIERS
 ]);
 
 export interface ActivityPrivacyOptions {
   captureEmailActivity?: boolean;
+  captureMessagingActivity?: boolean;
 }
 
 export function isProtectedActivityEvent(
@@ -121,6 +138,10 @@ export function isProtectedActivityEvent(
 ): boolean {
   const bundleIdentifier = event.application?.bundleIdentifier;
   if (bundleIdentifier && ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS.has(bundleIdentifier)) return true;
+  if (!options.captureMessagingActivity && (
+    (bundleIdentifier && MESSAGING_BUNDLE_IDENTIFIERS.has(bundleIdentifier)) ||
+    isMessagingBrowserObservation(event.browser)
+  )) return true;
   if (!options.captureEmailActivity && (
     (bundleIdentifier && MAIL_BUNDLE_IDENTIFIERS.has(bundleIdentifier)) ||
     (event.browser?.domain && isMailDomain(event.browser.domain)) ||
@@ -128,6 +149,26 @@ export function isProtectedActivityEvent(
   )) return true;
   return ["focused_element_changed", "text_input", "document_changed"].includes(event.kind) &&
     isSensitiveTextField(event.element);
+}
+
+function isMessagingBrowserObservation(browser: ActivityEvent["browser"]): boolean {
+  if (!browser) return false;
+  const domain = normalizeDomain(browser.domain);
+  if ([...MESSAGING_WEB_DOMAINS].some(
+    (protectedDomain) => domain === protectedDomain || domain.endsWith(`.${protectedDomain}`)
+  )) return true;
+
+  let path: string;
+  try {
+    path = new URL(browser.url).pathname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return (["x.com", "twitter.com"].includes(domain) && path.startsWith("/messages")) ||
+    ((domain === "facebook.com" || domain.endsWith(".facebook.com")) && path.startsWith("/messages")) ||
+    ((domain === "linkedin.com" || domain.endsWith(".linkedin.com")) && path.startsWith("/messaging")) ||
+    ((domain === "instagram.com" || domain.endsWith(".instagram.com")) && path.startsWith("/direct")) ||
+    ((domain === "reddit.com" || domain.endsWith(".reddit.com")) && path.startsWith("/message"));
 }
 
 export function filterProtectedActivityEvents(

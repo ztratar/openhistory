@@ -1,6 +1,7 @@
 import type { ActivityEvent } from "@shared/contracts";
 import { loadActivityEvents } from "./activity-event-file";
 import { sanitizeProjectionText } from "./agent-projection";
+import type { ActivityPrivacyOptions } from "./privacy-policy";
 
 const DEFAULT_WINDOW_MINUTES = 10;
 const MAX_WINDOW_MINUTES = 60;
@@ -27,7 +28,7 @@ export interface RecentActivitySource {
 export class RecentActivityReader implements RecentActivitySource {
   constructor(
     private readonly dataDirectory: string,
-    private readonly captureEmailActivity: () => boolean = () => false,
+    private readonly privacyOptions: () => ActivityPrivacyOptions = () => ({}),
     private readonly now: () => Date = () => new Date()
   ) {}
 
@@ -40,9 +41,7 @@ export class RecentActivityReader implements RecentActivitySource {
     const windowStartedAt = new Date(
       now.getTime() - boundedWindowMinutes * 60_000
     );
-    const activity = loadActivityEvents(this.dataDirectory, undefined, {
-      captureEmailActivity: this.captureEmailActivity()
-    });
+    const activity = loadActivityEvents(this.dataDirectory, undefined, this.privacyOptions());
     const inWindow = activity.filter(
       (event) => Date.parse(event.timestamp) >= windowStartedAt.getTime() &&
         Date.parse(event.timestamp) <= now.getTime()

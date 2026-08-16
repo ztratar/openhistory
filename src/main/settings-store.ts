@@ -19,6 +19,7 @@ const CollectionSettingsSchema = z.object({
   captureDocumentContext: z.boolean().default(true),
   captureUISnapshots: z.boolean().default(true),
   captureEmailActivity: z.boolean().default(false),
+  captureMessagingActivity: z.boolean().default(false),
   excludedBundleIdentifiers: z.array(z.string().min(1)).max(200)
 }).strict();
 
@@ -36,6 +37,7 @@ export const DEFAULT_COLLECTION_SETTINGS: CollectionSettings = {
   captureDocumentContext: true,
   captureUISnapshots: true,
   captureEmailActivity: false,
+  captureMessagingActivity: false,
   excludedBundleIdentifiers: []
 };
 

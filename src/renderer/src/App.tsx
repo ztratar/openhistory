@@ -622,6 +622,7 @@ function InferenceOnboarding({
   const [provider, setProvider] = useState<InferenceProvider>();
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [step, setStep] = useState<"model" | "capture">("model");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const cloudProvider = provider && isCloudInferenceProvider(provider) ? provider : undefined;
@@ -634,7 +635,23 @@ function InferenceOnboarding({
     setError(undefined);
   }
 
-  async function continueSetup(): Promise<void> {
+  function dismissProviderSelection(): void {
+    setProvider(undefined);
+    setModel("");
+    setApiKey("");
+    setError(undefined);
+  }
+
+  function continueSetup(): void {
+    if (!provider || !model || appleUnavailable || (cloudProvider && !apiKey.trim())) return;
+    setError(undefined);
+    setStep("capture");
+  }
+
+  async function completeSetup(
+    captureEmailActivity: boolean,
+    captureMessagingActivity: boolean
+  ): Promise<void> {
     if (!provider || !model || appleUnavailable || (cloudProvider && !apiKey.trim())) return;
     setSaving(true);
     setError(undefined);
@@ -642,6 +659,8 @@ function InferenceOnboarding({
       setState(await window.openHistory.completeInferenceOnboarding({
         provider,
         model,
+        captureEmailActivity,
+        captureMessagingActivity,
         ...(cloudProvider ? { apiKey } : {})
       }));
     } catch {
@@ -651,10 +670,24 @@ function InferenceOnboarding({
     }
   }
 
+  if (step === "capture" && provider) {
+    return (
+      <CapturePreferencesOnboarding
+        error={error}
+        onBack={() => {
+          setError(undefined);
+          setStep("model");
+        }}
+        onComplete={completeSetup}
+        provider={provider}
+        saving={saving}
+      />
+    );
+  }
+
   return (
     <section className="model-onboarding" aria-labelledby="model-onboarding-title">
       <div className="model-onboarding-heading">
-        <span className="eyebrow">One more step</span>
         <h2 id="model-onboarding-title">Choose how your timeline is written.</h2>
         <p>OpenHistory needs a model to turn captured activity into readable history, hour summaries, and daily summaries. You can change this later in Settings.</p>
       </div>
@@ -696,9 +729,17 @@ function InferenceOnboarding({
       </div>
 
       {provider ? (
-        <div className="model-onboarding-config card">
+        <div className="model-config-backdrop" onClick={dismissProviderSelection} role="presentation">
+          <div
+            aria-labelledby="model-sheet-title"
+            aria-modal="true"
+            className="model-onboarding-config model-onboarding-sheet card"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+          <span className="model-sheet-handle" aria-hidden="true" />
           <div className="model-choice-heading">
-            <strong>Choose a model</strong>
+            <strong id="model-sheet-title">Choose a model</strong>
             <span>{INFERENCE_ONBOARDING_COPY[provider].name}</span>
           </div>
           <div className="model-choice-list" role="radiogroup" aria-label={`${INFERENCE_ONBOARDING_COPY[provider].name} model`}>
@@ -718,6 +759,12 @@ function InferenceOnboarding({
 
           {cloudProvider ? (
             <>
+              {cloudProvider === "kimi" ? (
+                <div className="onboarding-jurisdiction-warning" role="note">
+                  <strong>Kimi data jurisdiction</strong>
+                  <p>Moonshot AI is a Chinese company operating under Chinese law. By selecting Kimi, you understand that Moonshot AI data is subject to national intelligence and cybersecurity state oversight.</p>
+                </div>
+              ) : null}
               <label className="onboarding-key-field">
                 <span>{INFERENCE_PROVIDER_LABELS[cloudProvider]} API key</span>
                 <input
@@ -731,7 +778,7 @@ function InferenceOnboarding({
               </label>
               <div className="onboarding-cloud-disclosure">
                 <strong>External processing</strong>
-                <p>About every 12 minutes, OpenHistory will send evidence from completed work sessions directly to {INFERENCE_PROVIDER_LABELS[cloudProvider]}. This can include app names, window titles, URLs or domains, document context, visible interface text, and text changes according to your capture settings. Raw event files remain local.</p>
+                <p>About every 10 minutes, OpenHistory will send evidence from completed work sessions directly to {INFERENCE_PROVIDER_LABELS[cloudProvider]}. This can include app names, window titles, URLs or domains, document context, visible interface text, and text changes according to your capture settings. Raw event files remain local.</p>
               </div>
             </>
           ) : (
@@ -747,18 +794,106 @@ function InferenceOnboarding({
           <button
             className="primary-button model-onboarding-continue"
             disabled={saving || !model || appleUnavailable || Boolean(cloudProvider && !apiKey.trim())}
-            onClick={() => void continueSetup()}
+            onClick={continueSetup}
             type="button"
           >
-            {saving
-              ? "Starting summaries…"
-              : cloudProvider
-                ? `Allow ${INFERENCE_PROVIDER_LABELS[cloudProvider]} and start summaries`
-                : "Use Apple On-Device"}
+            {cloudProvider
+              ? `Allow ${INFERENCE_PROVIDER_LABELS[cloudProvider]} and continue`
+              : "Continue"}
           </button>
           {cloudProvider ? <p className="onboarding-key-note">Your key is encrypted on this Mac and is never shown again.</p> : null}
+          </div>
         </div>
       ) : null}
+    </section>
+  );
+}
+
+function CapturePreferencesOnboarding({
+  error,
+  onBack,
+  onComplete,
+  provider,
+  saving
+}: {
+  error?: string;
+  onBack: () => void;
+  onComplete: (captureEmailActivity: boolean, captureMessagingActivity: boolean) => Promise<void>;
+  provider: InferenceProvider;
+  saving: boolean;
+}): React.JSX.Element {
+  const [captureEmailActivity, setCaptureEmailActivity] = useState(true);
+  const [captureMessagingActivity, setCaptureMessagingActivity] = useState(true);
+  const cloudProvider = isCloudInferenceProvider(provider) ? provider : undefined;
+  const hasSelection = captureEmailActivity || captureMessagingActivity;
+
+  return (
+    <section className="model-onboarding capture-onboarding" aria-labelledby="capture-onboarding-title">
+      <button className="onboarding-back-button" disabled={saving} onClick={onBack} type="button">
+        <svg aria-hidden="true" viewBox="0 0 16 16"><path d="m9.75 3.25-4.5 4.75 4.5 4.75" /></svg>
+        Back to model
+      </button>
+      <div className="model-onboarding-heading">
+        <span className="eyebrow">Optional capture</span>
+        <h2 id="capture-onboarding-title">Capture more of your work?</h2>
+        <p>Email and conversations often contain useful decisions and follow-ups. Both categories are selected by default; turn off either one to keep it excluded.</p>
+      </div>
+
+      <div className="capture-onboarding-card card">
+        <div className="capture-onboarding-options">
+          <label className={`capture-onboarding-option${captureEmailActivity ? " selected" : ""}`}>
+            <span>
+              <strong>Email activity</strong>
+              <small>Include recognized mail apps and webmail. Email addresses may be captured instead of automatically redacted.</small>
+            </span>
+            <input
+              checked={captureEmailActivity}
+              onChange={(event) => setCaptureEmailActivity(event.target.checked)}
+              type="checkbox"
+            />
+          </label>
+          <label className={`capture-onboarding-option${captureMessagingActivity ? " selected" : ""}`}>
+            <span>
+              <strong>Messages and chat activity</strong>
+              <small>Include Messages and iMessage, recognized chat apps and websites, and direct-message routes.</small>
+            </span>
+            <input
+              checked={captureMessagingActivity}
+              onChange={(event) => setCaptureMessagingActivity(event.target.checked)}
+              type="checkbox"
+            />
+          </label>
+        </div>
+
+        {cloudProvider ? (
+          <div className="onboarding-cloud-disclosure">
+            <strong>{`What ${INFERENCE_PROVIDER_LABELS[cloudProvider]} receives`}</strong>
+            <p>{`When enabled activity is selected for a summary, its evidence may be sent directly to ${INFERENCE_PROVIDER_LABELS[cloudProvider]}. Raw event files remain local.`}</p>
+          </div>
+        ) : null}
+
+        <p className="capture-onboarding-protection">Password fields, private browser windows, recognized adult websites, notifications, and password apps remain excluded.</p>
+        {error ? <ErrorMessage>{error}</ErrorMessage> : null}
+        <div className="capture-onboarding-actions">
+          <button
+            className="secondary-button"
+            disabled={saving}
+            onClick={() => void onComplete(false, false)}
+            type="button"
+          >
+            {saving ? "Finishing setup…" : "Keep excluded"}
+          </button>
+          <button
+            className="primary-button"
+            disabled={saving || !hasSelection}
+            onClick={() => void onComplete(captureEmailActivity, captureMessagingActivity)}
+            type="button"
+          >
+            {saving ? "Finishing setup…" : "Include selected"}
+          </button>
+        </div>
+        <p className="onboarding-key-note capture-onboarding-note">You can change either category later in Settings.</p>
+      </div>
     </section>
   );
 }
@@ -966,10 +1101,10 @@ function DayTimelineNode({
             onClick={onToggle}
             type="button"
           />
+          <span className={`timeline-day-caret ${expanded ? "is-expanded" : ""}`} aria-hidden="true">
+            <svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5" /></svg>
+          </span>
           <div className="timeline-summary-content">
-            <span className={`timeline-day-caret ${expanded ? "is-expanded" : ""}`} aria-hidden="true">
-              <svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5" /></svg>
-            </span>
             <span className="day-heading">
               <strong>{formatDayHeading(day.date)}</strong>
               <time>{formatDaySubheading(day.date)}</time>
@@ -1387,7 +1522,8 @@ function PermissionsPage({
     ["Browser URLs", "captureBrowserURLs"],
     ["Documents and folders", "captureDocumentContext"],
     ["Visible interface text", "captureUISnapshots"],
-    ["Email activity", "captureEmailActivity"]
+    ["Email activity", "captureEmailActivity"],
+    ["Messages and chat activity", "captureMessagingActivity"]
   ] as const;
 
   return (
@@ -1466,7 +1602,7 @@ function PermissionsPage({
       </div>
 
       <details className="settings-group card">
-        <summary><span>Capture details</span><small>8 settings</small></summary>
+        <summary><span>Capture details</span><small>9 settings</small></summary>
         <div className="settings-body">
           {captureSettings.map(([label, key]) => (
             <label className="switch-row" key={key}>
@@ -1480,8 +1616,15 @@ function PermissionsPage({
           ))}
           <p className="protected-note">
             {state.settings.captureEmailActivity
-              ? "Email apps and webmail can be included in local activity and summaries. If you use a cloud model, selected email evidence may be sent to that provider. Password fields, private browser windows, recognized adult websites, messaging, and password apps remain excluded."
-              : "Email apps and webmail are excluded. Password fields, private browser windows, recognized adult websites, messaging, and password apps are always excluded."}
+              ? "Email apps and webmail can be included. "
+              : "Email apps and webmail are excluded. "}
+            {state.settings.captureMessagingActivity
+              ? "Messages, including iMessage, and recognized chat apps and websites can be included. "
+              : "Messages, including iMessage, and recognized chat apps and websites are excluded. "}
+            {state.settings.captureEmailActivity || state.settings.captureMessagingActivity
+              ? "Enabled activity can contribute to local summaries and, when using a cloud model, selected evidence may be sent to that provider. "
+              : null}
+            Password fields, private browser windows, recognized adult websites, and password apps are always excluded.
           </p>
         </div>
       </details>
@@ -1642,8 +1785,8 @@ function SettingsPage({
           <span>
             <strong>Automatic summaries</strong>
             <small>{inferenceProvider === "apple"
-              ? "Summarize activity privately on this Mac about every 12 minutes."
-              : "Send activity evidence to your selected provider about every 12 minutes."}</small>
+              ? "Summarize activity privately on this Mac about every 10 minutes."
+              : "Send activity evidence to your selected provider about every 10 minutes."}</small>
           </span>
           <input
             checked={state.inference.settings.enabled}
@@ -1826,7 +1969,7 @@ function CloudInferenceDialog({
       >
         <span className="eyebrow">Cloud inference confirmation</span>
         <h2 id="cloud-dialog-title">Allow {providerLabel} to summarize activity?</h2>
-        <p id="cloud-dialog-description">OpenHistory will send evidence from completed work sessions directly to {providerLabel} about every 12 minutes. Chat requests may also send relevant sanitized history and privacy-filtered activity from a requested recent time window, whether or not it has already been summarized. Evidence may include app names, window titles, URLs or domains, document context, visible interface text, and text changes—according to your capture settings.</p>
+        <p id="cloud-dialog-description">OpenHistory will send evidence from completed work sessions directly to {providerLabel} about every 10 minutes. Chat requests may also send relevant sanitized history and privacy-filtered activity from a requested recent time window, whether or not it has already been summarized. Evidence may include app names, window titles, URLs or domains, document context, visible interface text, and text changes—according to your capture settings.</p>
         <p>Your raw event files remain local. The provider receives only the evidence assembled for summaries and handles it under its own terms and privacy policy.</p>
         {needsApiKey ? (
           <label className="consent-api-key">

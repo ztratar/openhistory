@@ -12,6 +12,7 @@ private struct CaptureConfiguration {
     let documentContext: Bool
     let uiSnapshots: Bool
     let emailActivity: Bool
+    let messagingActivity: Bool
     let excludedBundleIdentifiers: Set<String>
     let excludedProcessIdentifiers: Set<pid_t>
 
@@ -24,6 +25,7 @@ private struct CaptureConfiguration {
         documentContext = environment["OPENHISTORY_CAPTURE_DOCUMENT_CONTEXT"] != "false"
         uiSnapshots = environment["OPENHISTORY_CAPTURE_UI_SNAPSHOTS"] != "false"
         emailActivity = environment["OPENHISTORY_CAPTURE_EMAIL_ACTIVITY"] == "true"
+        messagingActivity = environment["OPENHISTORY_CAPTURE_MESSAGING_ACTIVITY"] == "true"
         excludedBundleIdentifiers = Set(
             (environment["OPENHISTORY_EXCLUDED_BUNDLE_IDENTIFIERS"] ?? "")
                 .split(separator: ",").map(String.init)
@@ -380,7 +382,8 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         }
         let protected = SemanticProtectionPolicy.protectsBrowserObservation(
             observation,
-            captureEmailActivity: configuration.emailActivity
+            captureEmailActivity: configuration.emailActivity,
+            captureMessagingActivity: configuration.messagingActivity
         )
         if protected {
             enterProtectedBrowserContext(processIdentifier: application.processIdentifier)
@@ -612,7 +615,8 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         return !configuration.excludedBundleIdentifiers.contains(bundleIdentifier) &&
             !SemanticProtectionPolicy.protectsApplication(
                 bundleIdentifier: bundleIdentifier,
-                captureEmailActivity: configuration.emailActivity
+                captureEmailActivity: configuration.emailActivity,
+                captureMessagingActivity: configuration.messagingActivity
             )
     }
 
