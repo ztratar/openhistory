@@ -66,12 +66,19 @@ Accessibility and optional email capture can include sensitive text, so the loca
 
 ## Quick start
 
-### Requirements
+### Download for Mac
+
+The easiest way to get started is to [**download OpenHistory for Mac →**](https://openhistory.sh). No Node.js or Xcode setup is required.
+
+OpenHistory requires macOS 14 or later. Apple's on-device summaries require Apple Intelligence on macOS 26 or later; OpenAI, Anthropic, and Kimi are available as optional alternatives.
+
+### Build from source
+
+If you'd rather inspect, modify, or build OpenHistory yourself, you'll need:
 
 - macOS 14 or later
 - Node.js 22
 - Xcode with Swift 6.1 or later
-- For summaries: Apple Intelligence on macOS 26 or later, or an OpenAI, Anthropic, or Kimi API key
 
 ```bash
 git clone https://github.com/ztratar/openhistory.git
@@ -79,6 +86,8 @@ cd openhistory
 npm ci
 npm run dev
 ```
+
+### First launch
 
 On first launch, OpenHistory keeps collection paused until you accept the privacy notice. You will then choose how summaries should work:
 
