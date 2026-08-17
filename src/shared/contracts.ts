@@ -19,6 +19,7 @@ export const IPC_CHANNELS = {
   clearInferenceApiKey: "openhistory:clear-inference-api-key",
   acceptPrivacyNotice: "openhistory:accept-privacy-notice",
   completeInferenceOnboarding: "openhistory:complete-inference-onboarding",
+  refreshAppleAvailability: "openhistory:refresh-apple-availability",
   authorizeCloudInference: "openhistory:authorize-cloud-inference",
   requestAccessibility: "openhistory:request-accessibility",
   revealDataDirectory: "openhistory:reveal-data-directory",
@@ -284,6 +285,7 @@ export interface OpenHistoryBridge {
   clearInferenceApiKey(provider: InferenceProvider): Promise<BootstrapState>;
   acceptPrivacyNotice(): Promise<BootstrapState>;
   completeInferenceOnboarding(selection: InferenceOnboardingSelection): Promise<BootstrapState>;
+  refreshAppleAvailability(): Promise<BootstrapState>;
   authorizeCloudInference(provider: CloudInferenceProvider): Promise<BootstrapState>;
   requestAccessibilityPermission(): Promise<BootstrapState>;
   revealDataDirectory(): Promise<void>;

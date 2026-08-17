@@ -378,6 +378,13 @@ async function initialize(): Promise<void> {
   await agentMcp.start();
 
   handleTrustedIpc(IPC_CHANNELS.getBootstrap, () => bootstrapState());
+  handleTrustedIpc(IPC_CHANNELS.refreshAppleAvailability, () => {
+    appleAvailability = publicAppleAvailability(probeAppleFoundationModel());
+    if (inferenceSettings.provider === "apple") {
+      inference.configure(inferenceSettings, activeApiKey("apple"));
+    }
+    return bootstrapState();
+  });
   handleTrustedIpc(IPC_CHANNELS.setCollectionEnabled, (_event, enabled: boolean) => {
     if (enabled && settingsStore.load().privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) {
       throw new Error("Accept the privacy notice before starting activity capture");
@@ -645,11 +652,12 @@ function activeApiKey(provider: InferenceProvider): string | undefined {
 }
 
 function publicAppleAvailability(
-  availability: { available: boolean; reason?: string }
+  availability: AppleInferenceAvailability
 ): AppleInferenceAvailability {
   return {
     available: availability.available,
-    ...(availability.reason ? { reason: availability.reason } : {})
+    ...(availability.reason ? { reason: availability.reason } : {}),
+    ...(availability.reasonCode ? { reasonCode: availability.reasonCode } : {})
   };
 }
 

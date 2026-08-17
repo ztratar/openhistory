@@ -4,6 +4,7 @@ import {
   assertInferenceOnboardingAvailability,
   normalizeInferenceOnboardingSelection
 } from "./inference-onboarding";
+import { appleInferenceAvailabilityGuidance } from "../shared/inference";
 
 test("accepts the supported Apple model without a credential", () => {
   assert.deepEqual(normalizeInferenceOnboardingSelection({
@@ -90,4 +91,40 @@ test("does not apply Apple availability to cloud onboarding", () => {
     available: false,
     reason: "macOS 26 or later is required."
   }));
+});
+
+test("gives Apple Intelligence and macOS failures distinct next steps", () => {
+  const disabled = appleInferenceAvailabilityGuidance({
+    available: false,
+    reasonCode: "appleIntelligenceNotEnabled"
+  });
+  assert.equal(disabled.title, "Turn on Apple Intelligence");
+  assert.match(disabled.description, /System Settings/);
+  assert.match(disabled.helpUrl ?? "", /^https:\/\/support\.apple\.com\//);
+  assert.doesNotMatch(disabled.description, /Update macOS/);
+
+  const outdated = appleInferenceAvailabilityGuidance({
+    available: false,
+    reason: "This Mac is running macOS 15.7. Apple On-Device requires macOS 26 or later.",
+    reasonCode: "unsupportedOperatingSystem"
+  });
+  assert.equal(outdated.title, "Update macOS to use Apple On-Device");
+  assert.match(outdated.description, /macOS 15\.7/);
+  assert.equal(outdated.helpLabel, "How to update macOS");
+});
+
+test("does not recommend an OS update for an ineligible Mac or pending model", () => {
+  const ineligible = appleInferenceAvailabilityGuidance({
+    available: false,
+    reasonCode: "deviceNotEligible"
+  });
+  assert.match(ineligible.description, /cloud provider/);
+  assert.doesNotMatch(ineligible.description, /Update macOS/);
+
+  const pending = appleInferenceAvailabilityGuidance({
+    available: false,
+    reasonCode: "modelNotReady"
+  });
+  assert.match(pending.description, /power and Wi-Fi/);
+  assert.doesNotMatch(pending.description, /Update macOS/);
 });

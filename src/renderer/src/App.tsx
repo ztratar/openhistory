@@ -15,6 +15,7 @@ import {
 } from "@shared/contracts";
 import {
   DEFAULT_INFERENCE_MODELS,
+  appleInferenceAvailabilityGuidance,
   isCloudInferenceProvider,
   INFERENCE_MODEL_OPTIONS,
   INFERENCE_PROVIDER_LABELS,
@@ -624,6 +625,7 @@ function InferenceOnboarding({
   const [apiKey, setApiKey] = useState("");
   const [step, setStep] = useState<"model" | "capture">("model");
   const [saving, setSaving] = useState(false);
+  const [checkingAppleAvailability, setCheckingAppleAvailability] = useState(false);
   const [error, setError] = useState<string>();
   const cloudProvider = provider && isCloudInferenceProvider(provider) ? provider : undefined;
   const appleUnavailable = provider === "apple" && !appleAvailability.available;
@@ -646,6 +648,18 @@ function InferenceOnboarding({
     if (!provider || !model || appleUnavailable || (cloudProvider && !apiKey.trim())) return;
     setError(undefined);
     setStep("capture");
+  }
+
+  async function refreshAppleAvailability(): Promise<void> {
+    setCheckingAppleAvailability(true);
+    setError(undefined);
+    try {
+      setState(await window.openHistory.refreshAppleAvailability());
+    } catch {
+      setError("OpenHistory could not check Apple Intelligence. Try again.");
+    } finally {
+      setCheckingAppleAvailability(false);
+    }
   }
 
   async function completeSetup(
@@ -783,10 +797,18 @@ function InferenceOnboarding({
             </>
           ) : (
             <div className={`onboarding-local-disclosure${appleUnavailable ? " unavailable" : ""}`}>
-              <strong>{appleUnavailable ? "Apple On-Device is unavailable" : "Private, but experimental & low quality"}</strong>
-              <p>{appleUnavailable
-                ? `${appleAvailability.reason ?? "This Mac does not meet the on-device model requirements."} Upgrade to macOS 26 or later if needed, or choose a cloud provider instead.`
-                : "No key is needed and no evidence leaves this Mac. Summary quality is currently lower and availability depends on this Mac’s Apple Intelligence support."}</p>
+              {appleUnavailable ? (
+                <AppleAvailabilityDetails
+                  availability={appleAvailability}
+                  checking={checkingAppleAvailability}
+                  onCheckAgain={refreshAppleAvailability}
+                />
+              ) : (
+                <>
+                  <strong>Private, but experimental & low quality</strong>
+                  <p>No key is needed and no evidence leaves this Mac. Summary quality is currently lower and availability depends on this Mac’s Apple Intelligence support.</p>
+                </>
+              )}
             </div>
           )}
 
@@ -806,6 +828,32 @@ function InferenceOnboarding({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function AppleAvailabilityDetails({
+  availability,
+  checking,
+  onCheckAgain
+}: {
+  availability: AppleInferenceAvailability;
+  checking: boolean;
+  onCheckAgain: () => void | Promise<void>;
+}): React.JSX.Element {
+  const guidance = appleInferenceAvailabilityGuidance(availability);
+  return (
+    <>
+      <strong>{guidance.title}</strong>
+      <p>{guidance.description}</p>
+      <div className="apple-availability-actions">
+        {guidance.helpUrl ? (
+          <a href={guidance.helpUrl} rel="noreferrer" target="_blank">{guidance.helpLabel}</a>
+        ) : null}
+        <button disabled={checking} onClick={() => void onCheckAgain()} type="button">
+          {checking ? "Checking…" : "Check again"}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -980,6 +1028,7 @@ function HistoryPage({
   const today = localDateKey(new Date());
   const updating = state.timeline.summarizing || state.hour.consolidating || state.dailyRollup.consolidating;
   const updateError = state.timeline.lastError ?? state.hour.lastError ?? state.dailyRollup.lastError;
+  const appleGuidance = appleInferenceAvailabilityGuidance(state.inference.appleAvailability);
 
   async function buildHistory(): Promise<void> {
     setState(await window.openHistory.buildHistory());
@@ -1009,10 +1058,10 @@ function HistoryPage({
           </span>
           <span className="api-key-callout-copy">
             <strong>{state.inference.settings.provider === "apple"
-              ? "Apple's on-device model is unavailable"
+              ? appleGuidance.title
               : "Automatic timeline updates need an API key"}</strong>
             <span>{state.inference.settings.provider === "apple"
-              ? "Review the local model requirements or choose a cloud provider in Settings."
+              ? appleGuidance.description
               : `Add a key for ${INFERENCE_PROVIDER_LABELS[state.inference.settings.provider]} in Settings.`}</span>
           </span>
           <button className="api-key-callout-action" onClick={onAddApiKey} type="button">
@@ -1646,6 +1695,7 @@ function SettingsPage({
 }): React.JSX.Element {
   const [apiKey, setApiKey] = useState("");
   const [savingApiKey, setSavingApiKey] = useState(false);
+  const [checkingAppleAvailability, setCheckingAppleAvailability] = useState(false);
   const [apiKeyMessage, setApiKeyMessage] = useState<string>();
   const [pendingCloudSettings, setPendingCloudSettings] = useState<InferenceSettings>();
   const [dataMessage, setDataMessage] = useState<string>();
@@ -1696,6 +1746,18 @@ function SettingsPage({
       setApiKeyMessage("The saved API key could not be removed.");
     } finally {
       setSavingApiKey(false);
+    }
+  }
+
+  async function refreshAppleAvailability(): Promise<void> {
+    setCheckingAppleAvailability(true);
+    setApiKeyMessage(undefined);
+    try {
+      setState(await window.openHistory.refreshAppleAvailability());
+    } catch {
+      setApiKeyMessage("OpenHistory could not check Apple Intelligence. Try again.");
+    } finally {
+      setCheckingAppleAvailability(false);
     }
   }
 
@@ -1854,10 +1916,21 @@ function SettingsPage({
           <div className="api-key-heading">
             <div>
               <strong>On-device requirements</strong>
-              <span>{state.inference.configured ? "Ready" : "Unavailable in this build or on this Mac"}</span>
+              <span>{state.inference.appleAvailability.available ? "Ready" : "Needs attention"}</span>
             </div>
           </div>
-          <p>No API key is needed and activity evidence stays on this Mac. This path is experimental: output quality varies, so review summaries before relying on them. Requires macOS 26, an Apple Intelligence-capable Mac with Apple Intelligence enabled, and an OpenHistory build made with Xcode 26 or later. Cloud providers remain available as an explicit fallback.</p>
+          {state.inference.appleAvailability.available ? (
+            <p>No API key is needed and activity evidence stays on this Mac. This path is experimental: output quality varies, so review summaries before relying on them.</p>
+          ) : (
+            <div className="settings-apple-availability">
+              <AppleAvailabilityDetails
+                availability={state.inference.appleAvailability}
+                checking={checkingAppleAvailability}
+                onCheckAgain={refreshAppleAvailability}
+              />
+            </div>
+          )}
+          {apiKeyMessage ? <span className="api-key-message">{apiKeyMessage}</span> : null}
         </div>
       ) : <form className="card api-key-settings" id="api-key-settings" onSubmit={saveApiKey}>
         <div className="api-key-heading">

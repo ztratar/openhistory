@@ -24,6 +24,8 @@ const bridge: OpenHistoryBridge = {
   acceptPrivacyNotice: () => ipcRenderer.invoke(IPC_CHANNELS.acceptPrivacyNotice),
   completeInferenceOnboarding: (selection) =>
     ipcRenderer.invoke(IPC_CHANNELS.completeInferenceOnboarding, selection),
+  refreshAppleAvailability: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.refreshAppleAvailability),
   authorizeCloudInference: (provider) =>
     ipcRenderer.invoke(IPC_CHANNELS.authorizeCloudInference, provider),
   requestAccessibilityPermission: () => ipcRenderer.invoke(IPC_CHANNELS.requestAccessibility),
