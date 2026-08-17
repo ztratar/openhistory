@@ -1,6 +1,6 @@
 # OpenHistory Privacy Policy
 
-Last updated: August 15, 2026
+Last updated: August 16, 2026
 
 OpenHistory is a local-first macOS application. This policy describes the data handled by the open-source app and the choices available to you. A distributor may publish additional terms for downloads or update infrastructure, but those terms must not weaken the in-app controls described here.
 
@@ -8,7 +8,7 @@ OpenHistory is a local-first macOS application. This policy describes the data h
 
 After you accept the first-run notice, OpenHistory can observe foreground applications and permitted macOS Accessibility context. Depending on your Settings choices, that context can include application and window names, focused controls, text changes, clicks, browser URLs or domains, document context, and visible interface text. OpenHistory does not capture screenshots, camera input, microphone input, audio, or low-level keyboard events.
 
-Secure and password-labeled fields, private browser windows, recognized adult websites, and recognized password applications are always excluded. Email activity and recognized Messages/iMessage and chat activity are excluded by default and can be enabled independently in Settings. When email capture is enabled, recognized mail apps and webmail may contribute local activity and email addresses are no longer automatically redacted from captured context. When messaging capture is enabled, recognized messaging apps, direct-message routes, and chat websites may contribute local activity. Enabled evidence may be sent to the configured cloud inference provider when selected for a summary or chat request. OpenHistory checks adult-site domains locally and does not record the matched domain or category. These protections reduce risk but cannot guarantee that every custom field, adult domain, or sensitive value is recognized. Treat your local OpenHistory directory as private.
+Secure and password-labeled fields, private browser windows, recognized adult websites, and recognized password applications are always excluded. During first-run setup, email activity and recognized Messages/iMessage and chat activity are selected for inclusion by default. You can clear either selection before finishing setup and later control each category independently in Settings. When email capture is enabled, recognized mail apps and webmail may contribute local activity and email addresses are no longer automatically redacted from captured context. When messaging capture is enabled, recognized messaging apps, direct-message routes, and chat websites may contribute local activity. Enabled evidence may be sent to the configured cloud inference provider when selected for a summary or chat request. OpenHistory checks adult-site domains locally and does not record the matched domain or category. These protections reduce risk but cannot guarantee that every custom field, adult domain, or sensitive value is recognized. Treat your local OpenHistory directory as private.
 
 ## Where data is stored
 

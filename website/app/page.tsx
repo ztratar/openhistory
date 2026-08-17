@@ -1,7 +1,8 @@
 import { Braces, CameraOff, Code2, Cpu, Pause, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import Image from "next/image";
-import { GitHubStarButton } from "./github-star-button";
 import { XFollowButton } from "./x-follow-button";
+
+const macDownloadUrl = "https://dl.todesktop.com/260815ukaa3eq/mac/installer/universal";
 
 const privacyPrinciples = [
   {
@@ -21,8 +22,8 @@ const privacyPrinciples = [
   },
   {
     icon: Braces,
-    title: "100% open source",
-    copy: "Read every line, inspect every permission, and verify exactly how your history is handled.",
+    title: "Source release planned",
+    copy: "The source and implementation details will be published after the initial macOS release is stable.",
   },
 ];
 
@@ -55,7 +56,7 @@ export default function Home() {
         <nav className="top-bar-nav" aria-label="Primary navigation">
           <a href="#privacy">Privacy</a>
           <a href="#how-it-works">How it works</a>
-          <a className="top-bar-download" href="https://github.com/ztratar/openhistory" aria-label="Download OpenHistory for Mac from GitHub">
+          <a className="top-bar-download" href={macDownloadUrl} aria-label="Download OpenHistory for Mac">
             <span className="top-bar-apple" aria-hidden="true"></span>
             Download for Mac
           </a>
@@ -73,17 +74,14 @@ export default function Home() {
 
           <div className="trust-row" aria-label="Product principles">
             <span><i className="trust-icon" aria-hidden="true"><ShieldCheck /></i> On-device by default</span>
-            <span><i className="trust-icon" aria-hidden="true"><Code2 /></i> Open source</span>
+            <span><i className="trust-icon" aria-hidden="true"><Code2 /></i> Source release planned</span>
             <span><i className="trust-icon" aria-hidden="true"><SlidersHorizontal /></i> Full control</span>
           </div>
 
-          <a className="download-button" href="https://github.com/ztratar/openhistory" aria-label="Download OpenHistory for Mac from GitHub">
+          <a className="download-button" href={macDownloadUrl} aria-label="Download OpenHistory for Mac">
             <span className="apple" aria-hidden="true"></span>
             Download for Mac
           </a>
-          <div className="hero-github-button">
-            <GitHubStarButton />
-          </div>
         </div>
         <div className="hero-mobile-timeline" aria-hidden="true" />
       </section>
@@ -154,9 +152,9 @@ export default function Home() {
       </section>
 
       <section className="final-cta">
-        <p>Open source. Local-first. Built for macOS.</p>
+        <p>Local-first. Built for macOS.</p>
         <h2>Remember everything.</h2>
-        <a className="download-button dark" href="https://github.com/ztratar/openhistory">
+        <a className="download-button dark" href={macDownloadUrl}>
           <span className="apple" aria-hidden="true"></span>
           Download for Mac
         </a>
@@ -166,9 +164,7 @@ export default function Home() {
         <span className="footer-brand">OpenHistory</span>
         <div className="footer-center">
           <nav className="footer-links" aria-label="Footer">
-            <a href="https://github.com/ztratar/openhistory">GitHub</a>
             <a href="/privacy">Privacy</a>
-            <a href="https://github.com/ztratar/openhistory/blob/main/SECURITY.md">Security</a>
           </nav>
           <XFollowButton className="footer-follow" />
         </div>

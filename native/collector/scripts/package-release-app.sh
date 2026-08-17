@@ -23,17 +23,24 @@ esac
 output_root=".todesktop/native/${requested_arch}"
 app_directory="${output_root}/OpenHistory Collector.app"
 macos_directory="${app_directory}/Contents/MacOS"
+swift_scratch_root=".todesktop/native/.swiftpm/release"
 
 build_architecture() {
   swift_arch="$1"
+  scratch_arch="${swift_arch}"
+  if [ "${scratch_arch}" = "x86_64" ]; then scratch_arch="x64"; fi
+  swift_scratch_path="${swift_scratch_root}/${scratch_arch}"
+  mkdir -p "${swift_scratch_path}"
   swift build \
     --disable-sandbox \
     --package-path native/collector \
+    --scratch-path "${swift_scratch_path}" \
     --configuration release \
     --arch "${swift_arch}" >&2
   swift build \
     --disable-sandbox \
     --package-path native/collector \
+    --scratch-path "${swift_scratch_path}" \
     --configuration release \
     --arch "${swift_arch}" \
     --show-bin-path

@@ -38,7 +38,8 @@ test("server-renders the OpenHistory landing page", async () => {
   assert.match(html, /ChatGPT Desktop/);
   assert.match(html, /local MCP server/);
   assert.match(html, /Follow for updates on OpenHistory/);
-  assert.match(html, /https:\/\/github\.com\/ztratar\/openhistory/);
+  assert.match(html, /https:\/\/dl\.todesktop\.com\/260815ukaa3eq\/mac\/installer\/universal/);
+  assert.doesNotMatch(html, /github\.com\/ztratar\/openhistory/);
   assert.match(html, /https:\/\/x\.com\/zachtratar/);
   assert.doesNotMatch(html, /codex-preview|Building your site|react-loading-skeleton/i);
 });
@@ -49,6 +50,7 @@ test("server-renders the public privacy policy", async () => {
   const html = await response.text();
   assert.match(html, /Your history belongs to you/);
   assert.match(html, /Saving an API key alone does not authorize transmission/);
+  assert.match(html, /email and messaging activity are selected for inclusion by default/);
   assert.match(html, /Delete all local data/);
 });
 

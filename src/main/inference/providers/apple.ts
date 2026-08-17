@@ -56,9 +56,6 @@ export function findFoundationModelExecutable(): string | undefined {
     resolve(process.cwd(), "native/collector/.build/debug/OpenHistory Collector.app/Contents/MacOS", name),
     resolve(process.cwd(), "native/collector/.build/debug", name),
     resolve(process.cwd(), "native/collector/.build/arm64-apple-macosx/debug", name),
-    typeof process.resourcesPath === "string"
-      ? resolve(process.resourcesPath, "native/OpenHistory Collector.app/Contents/MacOS", name)
-      : undefined,
     typeof process.resourcesPath === "string" ? resolve(process.resourcesPath, "native", name) : undefined
   ];
   return candidates.find((candidate): candidate is string => Boolean(candidate && existsSync(candidate)));

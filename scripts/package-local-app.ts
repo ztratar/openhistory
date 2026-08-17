@@ -67,16 +67,22 @@ await flipFuses(mainExecutable, {
   [FuseV1Options.OnlyLoadAppFromAsar]: true
 });
 
-const helper = resolve(
+const nativeDirectory = resolve(
   application,
   "Contents",
   "Resources",
-  "native",
-  "OpenHistory Collector.app"
+  "native"
 );
-execFileSync("codesign", ["--force", "--deep", "--sign", "-", "--timestamp=none", helper], {
-  stdio: "inherit"
-});
+const nativeComponents = [
+  "libOpenHistoryCollector.dylib",
+  "openhistory-native.node",
+  "foundation-model-worker"
+].map((name) => resolve(nativeDirectory, name));
+for (const component of nativeComponents) {
+  execFileSync("codesign", ["--force", "--sign", "-", "--timestamp=none", component], {
+    stdio: "inherit"
+  });
+}
 execFileSync("codesign", ["--force", "--deep", "--sign", "-", "--timestamp=none", application], {
   stdio: "inherit"
 });
@@ -104,10 +110,9 @@ function verifyApplication(applicationPath: string): void {
     throw new Error(`Unexpected local bundle identifier: ${bundleIdentifier}`);
   }
 
-  for (const name of ["activity-collector", "foundation-model-worker"]) {
-    const executable = resolve(helper, "Contents", "MacOS", name);
-    if (!statSync(executable).isFile() || (statSync(executable).mode & 0o111) === 0) {
-      throw new Error(`Local package is missing executable native helper: ${name}`);
+  for (const component of nativeComponents) {
+    if (!statSync(component).isFile() || (statSync(component).mode & 0o111) === 0) {
+      throw new Error(`Local package is missing native component: ${component}`);
     }
   }
 

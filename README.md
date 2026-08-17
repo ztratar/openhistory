@@ -62,7 +62,7 @@ OpenHistory leaves you with a useful memory of the day without taking screenshot
 
 Collection can be paused at any time. **Settings → Data & privacy → Delete all local data** removes recorded activity, summaries, settings, saved keys, and agent connections.
 
-Accessibility and optional email, Messages/iMessage, and chat capture can include sensitive text, so the local data directory should still be treated as private. Read the full [privacy policy](PRIVACY.md) and [security policy](SECURITY.md) before using OpenHistory with sensitive work.
+During first-run setup, email activity and recognized Messages/iMessage and chat activity are selected for inclusion by default. You can clear either selection before finishing setup and later control each category independently in Settings. Enabled email, messaging, or text-edit capture can contain sensitive text, so the local data directory should still be treated as private. Read the full [privacy policy](PRIVACY.md) and [security policy](SECURITY.md) before using OpenHistory with sensitive work.
 
 ## Quick start
 
@@ -112,11 +112,55 @@ OpenHistory reads ignored local environment files as a fallback. Supplying a key
 
 ### Accessibility permission
 
-Richer context requires macOS Accessibility permission. In OpenHistory, open **Settings** and choose **Grant access**. The development collector has a stable local permission identity at:
+Richer context requires macOS Accessibility permission. In OpenHistory, open **Settings** and choose **Grant access**. The collector runs in the Electron main process, so packaged builds present a single **OpenHistory** Accessibility entry instead of requiring permission for a second helper app.
+
+## Architecture
 
 ```text
-native/collector/.build/debug/OpenHistory Collector.app
+macOS Accessibility APIs
+          │
+          ▼
+Electron main process + embedded Swift collector
+          │
+          ├──────────────► permission-restricted JSONL
+          │
+          ▼
+deterministic episodes
+          │                      │
+          │                      ▼ automatic update
+          │          selected inference provider
+          │                      │
+          ▼                      ▼
+React UI ◄──────── timeline + hour + daily-rollup indexes
+                                 │
+                                 ▼ sanitized projection
+                     authenticated local MCP server
 ```
+
+The renderer is sandboxed and communicates through a narrow typed preload bridge. Structured model outputs are validated before persistence. Raw events, indexes, Markdown, settings, and agent credentials are restricted to the current macOS user.
+
+Inference inputs, prompts, schemas, limits, providers, and the native worker protocol are versioned and covered by preservation tests. See [the inference architecture](docs/architecture/inference.md) and [model-quality methodology](MODEL_QUALITY.md).
+
+## Privacy model
+
+- Collection can be paused at any time.
+- When automatic summaries are enabled and the selected provider has an API key, completed episode evidence is sent directly to that provider about every 10 minutes.
+- Chat requests send the conversation and relevant retrieved evidence to the configured cloud provider; questions about very recent work can include privacy-filtered activity not yet covered by a timeline summary.
+- OpenAI requests use `store: false`; Anthropic and Kimi requests are governed by their respective API data policies.
+- Credentials and credential-shaped text are redacted before persistence or projection.
+- Raw activity is excluded from the MCP projection.
+- Agent credentials are random, independently revocable, and stored only as SHA-256 hashes.
+- The MCP server binds to `127.0.0.1`, requires bearer authentication, and rejects non-local browser origins.
+
+See the complete [privacy policy](PRIVACY.md) and [SECURITY.md](SECURITY.md) for reporting security issues. Startup automatically removes historical protected activity and invalid derived summaries. To run that raw-event scrub manually, use:
+
+```bash
+npm run privacy:scrub-protected -- "/path/to/activity-data"
+```
+
+Raw JSONL remains the source of truth. Timeline items reference their exact source event IDs, while hourly and daily rollups independently reference revisions of verified timeline items. Stale derived data is not shown or sent back to the model. Existing version-1 data in `memory/` is imported into `daily-rollups/` on first launch after upgrading.
+
+Use **Settings > Data & privacy > Delete all local data** to remove raw activity, summaries, settings, saved keys, and agent connections. OpenHistory confirms the action natively and restarts. For a full uninstall, delete local data first, remove the app, then remove its Accessibility permission in System Settings.
 
 ## Local agent access
 
@@ -152,11 +196,17 @@ npm run build     # Native collector and Electron production bundles
 npm run check     # Complete local quality gate
 ```
 
-To build a complete local application without uploading anything to ToDesktop:
+## Desktop distribution
+
+The repository includes a credential-free local path for testing the ToDesktop packaging and update configuration. It isolates the release CLI from the application dependency tree, builds universal native components, embeds the Swift collector inside Electron's main process, and uses an explicit upload manifest that excludes local data and private evaluation assets. See [the ToDesktop release guide](docs/releasing-todesktop.md).
+
+Build a complete runnable application locally without ToDesktop credentials or an upload:
 
 ```bash
 npm run desktop:package:local
 ```
+
+The verified, ad-hoc-signed application is written under `.todesktop/local/`. It contains only compiled application output, production dependencies, the public icon, the in-process collector bridge, and the Foundation Models worker.
 
 Useful references:
 
