@@ -67,6 +67,9 @@ const beforeBuildSource = readFileSync(resolve(root, "scripts/todesktop-before-b
 const signedVerifierPath = resolve(root, "scripts/verify-signed-macos-app.sh");
 const signedVerifierSource = readFileSync(signedVerifierPath, "utf8");
 expect(mainSource.includes("todesktop.init();"), "ToDesktop runtime is not initialized in the main process");
+expect(mainSource.includes("setPermissionCheckHandler(() => false)"), "renderer permission checks must fail closed");
+expect(mainSource.includes("setPermissionRequestHandler"), "renderer permission requests must be denied explicitly");
+expect(mainSource.includes("will-navigate"), "top-level renderer navigation must be guarded");
 expect(collectorSource.includes("native/OpenHistory Collector.app/Contents/MacOS"), "collector does not know the packaged helper path");
 expect(appleSource.includes("native/OpenHistory Collector.app/Contents/MacOS"), "Apple worker does not know the packaged helper path");
 expect(localPackagerSource.includes("ignoreOutsideRuntimeAllowlist"), "local package must use a runtime file allowlist");

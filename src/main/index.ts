@@ -161,6 +161,10 @@ function createWindow(): void {
     }
   });
 
+  mainWindow.webContents.session.setPermissionCheckHandler(() => false);
+  mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     const externalUrl = safeExternalHttpsUrl(url);
     if (externalUrl) void shell.openExternal(externalUrl);
