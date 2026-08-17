@@ -516,7 +516,18 @@ final class AccessibilityReader {
             attribute: kAXNumberOfCharactersAttribute as CFString
         ) else { return nil }
         let regionLength = min(1_600, max(0, characterCount - regionStart))
-        guard regionLength > 0 else { return nil }
+        if regionLength == 0 {
+            // Keep the same region key before and after the first character so an empty
+            // composer remains the baseline instead of silently dropping its first edit.
+            return (
+                "region-\(regionStart)",
+                "",
+                regionStart,
+                selectedRange.location,
+                selectedRange.length,
+                characterCount
+            )
+        }
         var region = CFRange(location: regionStart, length: regionLength)
         guard let regionValue = AXValueCreate(.cfRange, &region) else { return nil }
         var value: CFTypeRef?

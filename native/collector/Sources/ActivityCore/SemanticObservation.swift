@@ -256,6 +256,22 @@ public enum SemanticSanitizer {
         return Double(changedCharacters) / Double(largestDocument) >= 0.75
     }
 
+    public static func isAbruptTextReset(
+        baselineValue: String,
+        currentValue: String,
+        nextValue: String
+    ) -> Bool {
+        guard baselineValue != currentValue,
+              nextValue.isEmpty,
+              currentValue.count >= 2 else { return false }
+        let reset = textChange(
+            from: currentValue,
+            to: nextValue,
+            redactEmailAddresses: false
+        )
+        return reset.deletedCharacterCount >= max(2, currentValue.count * 3 / 4)
+    }
+
     public static func isSensitiveFieldMetadata(_ values: [String?]) -> Bool {
         let metadata = values.compactMap { $0 }.joined(separator: " ").lowercased()
         return sensitiveFieldPhrases.contains { metadata.contains($0) }
