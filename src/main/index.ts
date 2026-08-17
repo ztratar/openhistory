@@ -5,6 +5,7 @@ import {
   type AgentAccessState,
   type BootstrapState,
   type CollectionSettings,
+  type HistoryChatTurn,
   type HourState,
   type InferenceOnboardingSelection,
   type DailyRollupState,
@@ -21,10 +22,21 @@ import {
   type InferenceProvider,
   type InferenceSettings
 } from "@shared/inference";
-import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, safeStorage, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  nativeTheme,
+  safeStorage,
+  shell,
+  type IpcMainInvokeEvent
+} from "electron";
 import { existsSync } from "node:fs";
 import { release } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { AgentAccessStore } from "./agent-access-store";
 import { AgentMcpService } from "./agent-mcp-service";
 import { AgentProjectionStore } from "./agent-projection";
@@ -58,6 +70,7 @@ import { writePrivateFile } from "./private-storage";
 import { cloudInferenceNeedsApiKey, cloudInferenceNeedsConsent } from "./privacy-consent";
 import { ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS } from "./privacy-policy";
 import { reconcileProtectedHistory } from "./privacy-reconciler";
+import { isTrustedRendererUrl, safeExternalHttpsUrl } from "./renderer-security";
 import { SettingsStore } from "./settings-store";
 import { TimelineCoordinator } from "./timeline-coordinator";
 import { TimelineStore } from "./timeline-store";
@@ -92,6 +105,26 @@ let initialHistoryTimer: ReturnType<typeof setTimeout> | undefined;
 let catchUpHistoryTimer: ReturnType<typeof setTimeout> | undefined;
 let historyBuildPromise: Promise<void> | undefined;
 const applicationIconCache = new Map<string, Promise<string | undefined>>();
+
+function rendererUrlIsTrusted(value: string): boolean {
+  return isTrustedRendererUrl(
+    value,
+    pathToFileURL(join(__dirname, "../renderer/index.html")).href,
+    process.env.ELECTRON_RENDERER_URL
+  );
+}
+
+function handleTrustedIpc<Arguments extends unknown[], Result>(
+  channel: string,
+  listener: (event: IpcMainInvokeEvent, ...args: Arguments) => Result
+): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!event.senderFrame || !rendererUrlIsTrusted(event.senderFrame.url)) {
+      throw new Error("Rejected IPC request from an untrusted renderer");
+    }
+    return listener(event, ...(args as Arguments));
+  });
+}
 
 function openHistoryIconPath(): string | undefined {
   const candidates = [
@@ -129,8 +162,19 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://")) void shell.openExternal(url);
+    const externalUrl = safeExternalHttpsUrl(url);
+    if (externalUrl) void shell.openExternal(externalUrl);
     return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (rendererUrlIsTrusted(url)) return;
+    event.preventDefault();
+    const externalUrl = safeExternalHttpsUrl(url);
+    if (externalUrl) void shell.openExternal(externalUrl);
+  });
+  mainWindow.webContents.on("will-redirect", (event, url) => {
+    if (rendererUrlIsTrusted(url)) return;
+    event.preventDefault();
   });
   mainWindow.on("closed", () => { mainWindow = undefined; });
 
@@ -329,15 +373,15 @@ async function initialize(): Promise<void> {
   agentMcp.on("state", sendAgentAccessState);
   await agentMcp.start();
 
-  ipcMain.handle(IPC_CHANNELS.getBootstrap, () => bootstrapState());
-  ipcMain.handle(IPC_CHANNELS.setCollectionEnabled, (_event, enabled: boolean) => {
+  handleTrustedIpc(IPC_CHANNELS.getBootstrap, () => bootstrapState());
+  handleTrustedIpc(IPC_CHANNELS.setCollectionEnabled, (_event, enabled: boolean) => {
     if (enabled && settingsStore.load().privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) {
       throw new Error("Accept the privacy notice before starting activity capture");
     }
     collector.setEnabled(Boolean(enabled));
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.updateCollectionSettings, async (_event, settings: CollectionSettings) => {
+  handleTrustedIpc(IPC_CHANNELS.updateCollectionSettings, async (_event, settings: CollectionSettings) => {
     const current = settingsStore.load();
     const saved = settingsStore.save({
       ...settings,
@@ -370,7 +414,7 @@ async function initialize(): Promise<void> {
     }
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.updateInferenceSettings, async (_event, next: InferenceSettings) => {
+  handleTrustedIpc(IPC_CHANNELS.updateInferenceSettings, async (_event, next: InferenceSettings) => {
     if (next.enabled && settingsStore.load().privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) {
       throw new Error("Accept the privacy notice before enabling automatic summaries");
     }
@@ -386,7 +430,7 @@ async function initialize(): Promise<void> {
     buildHistoryIfNeeded();
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.setInferenceApiKey, async (
+  handleTrustedIpc(IPC_CHANNELS.setInferenceApiKey, async (
     _event,
     provider: InferenceProvider,
     apiKey: string
@@ -401,7 +445,7 @@ async function initialize(): Promise<void> {
     buildHistoryIfNeeded();
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.clearInferenceApiKey, async (_event, provider: InferenceProvider) => {
+  handleTrustedIpc(IPC_CHANNELS.clearInferenceApiKey, async (_event, provider: InferenceProvider) => {
     if (!isInferenceProvider(provider)) throw new Error("Invalid inference provider");
     if (historyBuildPromise) await historyBuildPromise;
     apiKeyStores[provider].clear();
@@ -411,7 +455,7 @@ async function initialize(): Promise<void> {
     }
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.acceptPrivacyNotice, () => {
+  handleTrustedIpc(IPC_CHANNELS.acceptPrivacyNotice, () => {
     const current = settingsStore.load();
     const saved = settingsStore.save({
       ...current,
@@ -421,7 +465,7 @@ async function initialize(): Promise<void> {
     collector.setEnabled(true);
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.completeInferenceOnboarding, async (
+  handleTrustedIpc(IPC_CHANNELS.completeInferenceOnboarding, async (
     _event,
     requestedSelection: InferenceOnboardingSelection
   ) => {
@@ -468,7 +512,7 @@ async function initialize(): Promise<void> {
     buildHistoryIfNeeded();
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.authorizeCloudInference, (
+  handleTrustedIpc(IPC_CHANNELS.authorizeCloudInference, (
     _event,
     provider: CloudInferenceProvider
   ) => {
@@ -483,17 +527,17 @@ async function initialize(): Promise<void> {
     });
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.requestAccessibility, () => {
+  handleTrustedIpc(IPC_CHANNELS.requestAccessibility, () => {
     if (settingsStore.load().privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) {
       throw new Error("Accept the privacy notice before requesting activity access");
     }
     collector.requestAccessibilityPermission();
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.revealDataDirectory, async () => {
+  handleTrustedIpc(IPC_CHANNELS.revealDataDirectory, async () => {
     await shell.openPath(config.dataDirectory);
   });
-  ipcMain.handle(IPC_CHANNELS.exportDiagnostics, async () => {
+  handleTrustedIpc(IPC_CHANNELS.exportDiagnostics, async () => {
     const result = await dialog.showSaveDialog(mainWindow!, {
       title: "Export privacy-safe diagnostics",
       defaultPath: join(app.getPath("documents"), "OpenHistory Diagnostics.json"),
@@ -511,7 +555,7 @@ async function initialize(): Promise<void> {
     writePrivateFile(result.filePath, `${JSON.stringify(diagnostics, null, 2)}\n`);
     return true;
   });
-  ipcMain.handle(IPC_CHANNELS.deleteAllData, async () => {
+  handleTrustedIpc(IPC_CHANNELS.deleteAllData, async () => {
     const confirmation = await dialog.showMessageBox(mainWindow!, {
       type: "warning",
       title: "Delete all OpenHistory data?",
@@ -537,32 +581,32 @@ async function initialize(): Promise<void> {
     }, 150);
     return true;
   });
-  ipcMain.handle(IPC_CHANNELS.buildHistory, async () => {
+  handleTrustedIpc(IPC_CHANNELS.buildHistory, async () => {
     await buildHistory();
     return bootstrapState();
   });
-  ipcMain.handle(IPC_CHANNELS.copyAgentSetup, () => {
+  handleTrustedIpc(IPC_CHANNELS.copyAgentSetup, () => {
     const { prompt, state } = agentMcp.createSetup();
     clipboard.writeText(prompt);
     sendAgentAccessState(state);
     return state;
   });
-  ipcMain.handle(IPC_CHANNELS.revokeAgentConnection, (_event, id: string) => {
+  handleTrustedIpc(IPC_CHANNELS.revokeAgentConnection, (_event, id: string) => {
     if (typeof id !== "string" || id.length > 100) throw new Error("Invalid connection identifier");
     agentAccessStore.revoke(id);
     const state = agentMcp.getState();
     sendAgentAccessState(state);
     return state;
   });
-  ipcMain.handle(IPC_CHANNELS.listInstalledApplications, () => listInstalledApplications().filter(
+  handleTrustedIpc(IPC_CHANNELS.listInstalledApplications, () => listInstalledApplications().filter(
     (application) => !application.bundleIdentifier ||
       !ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS.has(application.bundleIdentifier)
   ));
-  ipcMain.handle(IPC_CHANNELS.getApplicationIcon, (_event, application: TimelineApplication) => {
+  handleTrustedIpc(IPC_CHANNELS.getApplicationIcon, (_event, application: TimelineApplication) => {
     if (!application || typeof application.name !== "string") return undefined;
     return applicationIcon(application);
   });
-  ipcMain.handle(IPC_CHANNELS.historyChat, async (_event, turns) => {
+  handleTrustedIpc(IPC_CHANNELS.historyChat, async (_event, turns: HistoryChatTurn[]) => {
     try {
       return await historyChat.reply(turns);
     } catch (error) {
