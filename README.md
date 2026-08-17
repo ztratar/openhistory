@@ -62,7 +62,7 @@ OpenHistory leaves you with a useful memory of the day without taking screenshot
 
 Collection can be paused at any time. **Settings → Data & privacy → Delete all local data** removes recorded activity, summaries, settings, saved keys, and agent connections.
 
-Accessibility and optional email, Messages/iMessage, and chat capture can include sensitive text, so the local data directory should still be treated as private. Read the full [privacy policy](PRIVACY.md) and [security policy](SECURITY.md) before using OpenHistory with sensitive work.
+During first-run setup, email activity and recognized Messages/iMessage and chat activity are selected for inclusion by default. You can clear either selection before finishing setup and later control each category independently in Settings. Enabled email, messaging, or text-edit capture can contain sensitive text, so the local data directory should still be treated as private. Read the full [privacy policy](PRIVACY.md) and [security policy](SECURITY.md) before using OpenHistory with sensitive work.
 
 ## Quick start
 
