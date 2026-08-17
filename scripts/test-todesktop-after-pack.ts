@@ -34,6 +34,14 @@ try {
     const executable = resolve(destination, "Contents", "MacOS", name);
     if (!existsSync(executable)) throw new Error(`afterPack did not embed ${name}`);
   }
+  const accessibilityProbe = resolve(
+    application,
+    "Contents",
+    "Resources",
+    "native",
+    "accessibility-identity-probe.node"
+  );
+  if (!existsSync(accessibilityProbe)) throw new Error("afterPack did not embed the Accessibility identity spike module");
   const identifier = execFileSync("/usr/libexec/PlistBuddy", [
     "-c",
     "Print :CFBundleIdentifier",

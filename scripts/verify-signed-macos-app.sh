@@ -21,8 +21,13 @@ case "${application_path}" in
 esac
 
 helper_path="${application_path}/Contents/Resources/native/OpenHistory Collector.app"
+accessibility_probe_path="${application_path}/Contents/Resources/native/accessibility-identity-probe.node"
 if [ ! -d "${helper_path}" ]; then
   echo "Nested collector bundle is missing: ${helper_path}" >&2
+  exit 1
+fi
+if [ ! -f "${accessibility_probe_path}" ]; then
+  echo "Accessibility identity probe is missing: ${accessibility_probe_path}" >&2
   exit 1
 fi
 
@@ -73,11 +78,15 @@ fi
 
 verify_developer_id_signature "${application_path}" "OpenHistory"
 verify_developer_id_signature "${helper_path}" "OpenHistory Collector"
+verify_developer_id_signature "${accessibility_probe_path}" "OpenHistory Accessibility identity probe"
 
 main_team_id="$(team_id "${application_path}")"
 helper_team_id="$(team_id "${helper_path}")"
-if [ "${main_team_id}" != "${expected_team_id}" ] || [ "${helper_team_id}" != "${expected_team_id}" ]; then
-  echo "Main and collector TeamIdentifiers must both be ${expected_team_id}." >&2
+accessibility_probe_team_id="$(team_id "${accessibility_probe_path}")"
+if [ "${main_team_id}" != "${expected_team_id}" ] ||
+   [ "${helper_team_id}" != "${expected_team_id}" ] ||
+   [ "${accessibility_probe_team_id}" != "${expected_team_id}" ]; then
+  echo "Main app, collector, and Accessibility probe TeamIdentifiers must all be ${expected_team_id}." >&2
   exit 1
 fi
 

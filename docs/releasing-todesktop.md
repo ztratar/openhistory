@@ -11,6 +11,7 @@ OpenHistory uses ToDesktop Platform only as an experimental macOS packaging and 
 - The native executables are packaged in `OpenHistory Collector.app` with the stable `io.github.ztratar.openhistory.collector` identity.
 - The `afterPack` hook embeds the helper under the main application's resources before ToDesktop applies Electron fuses, Developer ID signing, notarization, and installer creation.
 - The application resolves both the development helper paths and the packaged nested helper paths.
+- A universal Node-API Accessibility identity probe can execute inside the Electron main process, allowing macOS to authorize the permanent `io.github.ztratar.openhistory` identity instead of the nested collector identity.
 
 The only material question that requires a real ToDesktop build is whether its current macOS worker image supplies the Xcode 26 SDK used by the Foundation Models helper. The production build will fail closed if the Swift build or native embedding fails.
 
@@ -62,6 +63,7 @@ OpenHistory.app/
   Contents/
     Resources/
       native/
+        accessibility-identity-probe.node
         OpenHistory Collector.app/
           Contents/
             Info.plist
@@ -70,7 +72,22 @@ OpenHistory.app/
               foundation-model-worker
 ```
 
-The nested bundle is intentionally unsigned when inserted. Ad-hoc signatures are used only by `npm run desktop:verify`; a remote ToDesktop build must apply the final Developer ID signature to the complete nested code hierarchy.
+The nested bundle and probe carry local ad-hoc baseline signatures when inserted. A remote ToDesktop build must replace them with final Developer ID signatures across the complete nested code hierarchy.
+
+## Accessibility identity result
+
+The in-process Accessibility architecture is viable. The spike loads a universal Node-API module in Electron's main process and records only process identity and permission state when `OPENHISTORY_ACCESSIBILITY_IDENTITY_SPIKE=1` is explicitly set. It disables the executable collector during that run so the two identities cannot be confused.
+
+The packaged macOS test established all of the following:
+
+- JavaScript and native code reported the same process identifier.
+- `CFBundleGetMainBundle()` reported `io.github.ztratar.openhistory`.
+- `AXIsProcessTrusted()` returned true for that process.
+- A content-free `AXUIElementCopyAttributeValue` call could read the focused application.
+- The app and probe were successfully signed with `Developer ID Application: Zachary Tratar (PNTEN2B9C4)`, shared Team ID `PNTEN2B9C4`, and passed strict deep code-sign verification.
+- System Settings displayed one enabled `OpenHistory` Accessibility entry and no `OpenHistory Collector` entry.
+
+This proves that moving the collector engine into a native module loaded by Electron can provide the intended single-permission experience. It does not yet prove the full collector refactor, the first-run prompt on a clean TCC database, ToDesktop notarization of the new module, or authorization persistence across a signed auto-update. Those remain release gates for the implementation.
 
 ## Credentialed build
 

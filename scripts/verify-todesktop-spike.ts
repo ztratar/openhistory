@@ -26,7 +26,8 @@ expect(packageJson.devDependencies?.["@electron/fuses"] === "2.1.3", "local Elec
 expect(typeof packageJson.author === "string" && /<[^<>\s]+@[^<>\s]+>/.test(packageJson.author), "package author must contain a valid email");
 expect(packageJson.scripts?.["todesktop:beforeBuild"] === "./scripts/todesktop-before-build.cjs", "beforeBuild hook must remain configured");
 expect(packageJson.scripts?.["todesktop:afterPack"] === "./scripts/todesktop-after-pack.cjs", "afterPack hook must remain configured");
-expect(packageJson.scripts?.["desktop:package:local"] === "npm run build:electron && node --import tsx scripts/package-local-app.ts", "local desktop packaging command changed");
+expect(packageJson.scripts?.["desktop:package:local"] === "npm run build:electron && npm run package:native:todesktop && node --import tsx scripts/package-local-app.ts", "local desktop packaging command changed");
+expect(packageJson.scripts?.["package:native:todesktop"]?.includes("npm run package:accessibility-spike") === true, "ToDesktop native packaging must build the Accessibility identity spike");
 expect(packageJson.scripts?.["desktop:smoke-test"]?.includes("smoke-test --ephemeral --latest") === true, "credentialed ToDesktop smoke-test command is missing");
 expect(packageJson.scripts?.["desktop:verify:signed"] === "sh scripts/verify-signed-macos-app.sh", "signed macOS verification command changed");
 expect(config.id === "260815ukaa3eq", "ToDesktop application identifier changed");
@@ -71,6 +72,7 @@ expect(mainSource.includes("setPermissionCheckHandler(() => false)"), "renderer 
 expect(mainSource.includes("setPermissionRequestHandler"), "renderer permission requests must be denied explicitly");
 expect(mainSource.includes("will-navigate"), "top-level renderer navigation must be guarded");
 expect(collectorSource.includes("native/OpenHistory Collector.app/Contents/MacOS"), "collector does not know the packaged helper path");
+expect(packageJson.scripts?.["package:accessibility-spike"] === "sh native/accessibility-spike/build.sh universal", "Accessibility identity spike build command changed");
 expect(appleSource.includes("native/OpenHistory Collector.app/Contents/MacOS"), "Apple worker does not know the packaged helper path");
 expect(localPackagerSource.includes("ignoreOutsideRuntimeAllowlist"), "local package must use a runtime file allowlist");
 expect(localPackagerSource.includes("todesktop-after-pack.cjs"), "local package must exercise the ToDesktop native embedding hook");

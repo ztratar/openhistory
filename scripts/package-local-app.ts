@@ -74,6 +74,16 @@ const helper = resolve(
   "native",
   "OpenHistory Collector.app"
 );
+const accessibilityProbe = resolve(
+  application,
+  "Contents",
+  "Resources",
+  "native",
+  "accessibility-identity-probe.node"
+);
+execFileSync("codesign", ["--force", "--sign", "-", "--timestamp=none", accessibilityProbe], {
+  stdio: "inherit"
+});
 execFileSync("codesign", ["--force", "--deep", "--sign", "-", "--timestamp=none", helper], {
   stdio: "inherit"
 });
@@ -109,6 +119,9 @@ function verifyApplication(applicationPath: string): void {
     if (!statSync(executable).isFile() || (statSync(executable).mode & 0o111) === 0) {
       throw new Error(`Local package is missing executable native helper: ${name}`);
     }
+  }
+  if (!statSync(accessibilityProbe).isFile()) {
+    throw new Error("Local package is missing the Accessibility identity spike module");
   }
 
   const asarPath = resolve(applicationPath, "Contents", "Resources", "app.asar");

@@ -31,7 +31,25 @@ module.exports = async ({ appDir, appOutDir, arch, packager }) => {
   mkdirSync(path.dirname(destination), { recursive: true });
   cpSync(source, destination, { recursive: true, dereference: false });
   verifyNativeBundle(destination);
-  console.log(`Embedded baseline-signed universal native helper for ToDesktop Developer ID signing: ${destination}`);
+  const accessibilityProbeSource = path.join(
+    appDir,
+    ".todesktop",
+    "native",
+    "universal",
+    "accessibility-identity-probe.node"
+  );
+  const accessibilityProbeDestination = path.join(
+    application,
+    "Contents",
+    "Resources",
+    "native",
+    "accessibility-identity-probe.node"
+  );
+  if (!existsSync(accessibilityProbeSource)) {
+    throw new Error("Accessibility identity spike module is missing; run npm run package:accessibility-spike");
+  }
+  cpSync(accessibilityProbeSource, accessibilityProbeDestination);
+  console.log(`Embedded baseline-signed universal native components for ToDesktop Developer ID signing: ${destination}`);
 };
 
 function verifyNativeBundle(bundle) {
