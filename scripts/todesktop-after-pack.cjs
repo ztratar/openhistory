@@ -6,56 +6,51 @@ const SUPPORTED_ARCHITECTURES = new Set([1, 3, 4]);
 
 module.exports = async ({ appDir, appOutDir, arch, packager }) => {
   if (process.platform !== "darwin") {
-    throw new Error("OpenHistory's ToDesktop spike supports macOS builds only");
+    throw new Error("OpenHistory's ToDesktop packaging supports macOS builds only");
   }
   if (!SUPPORTED_ARCHITECTURES.has(arch)) {
     throw new Error(`Unsupported packaged architecture: ${String(arch)}`);
   }
 
-  const source = path.join(
+  const nativeSource = path.join(
     appDir,
     ".todesktop",
     "native",
-    "universal",
-    "OpenHistory Collector.app"
+    "universal"
   );
   const application = path.join(appOutDir, `${packager.appInfo.productFilename}.app`);
   const destination = path.join(
     application,
     "Contents",
     "Resources",
-    "native",
-    "OpenHistory Collector.app"
+    "native"
   );
   rmSync(destination, { recursive: true, force: true });
-  mkdirSync(path.dirname(destination), { recursive: true });
-  cpSync(source, destination, { recursive: true, dereference: false });
-  verifyNativeBundle(destination);
-  const accessibilityProbeSource = path.join(
-    appDir,
-    ".todesktop",
-    "native",
-    "universal",
-    "accessibility-identity-probe.node"
-  );
-  const accessibilityProbeDestination = path.join(
-    application,
-    "Contents",
-    "Resources",
-    "native",
-    "accessibility-identity-probe.node"
-  );
-  if (!existsSync(accessibilityProbeSource)) {
-    throw new Error("Accessibility identity spike module is missing; run npm run package:accessibility-spike");
+  mkdirSync(destination, { recursive: true });
+  const sources = {
+    "openhistory-native.node": path.join(nativeSource, "openhistory-native.node"),
+    "libOpenHistoryCollector.dylib": path.join(nativeSource, "libOpenHistoryCollector.dylib"),
+    "foundation-model-worker": path.join(
+      nativeSource,
+      "OpenHistory Collector.app",
+      "Contents",
+      "MacOS",
+      "foundation-model-worker"
+    )
+  };
+  for (const [name, source] of Object.entries(sources)) {
+    if (!existsSync(source) || !statSync(source).isFile()) {
+      throw new Error(`Packaged native component is missing: ${name}`);
+    }
+    cpSync(source, path.join(destination, name));
   }
-  cpSync(accessibilityProbeSource, accessibilityProbeDestination);
+  verifyNativeBundle(destination);
   console.log(`Embedded baseline-signed universal native components for ToDesktop Developer ID signing: ${destination}`);
 };
 
 function verifyNativeBundle(bundle) {
-  const executableDirectory = path.join(bundle, "Contents", "MacOS");
-  for (const name of ["activity-collector", "foundation-model-worker"]) {
-    const executable = path.join(executableDirectory, name);
+  for (const name of ["openhistory-native.node", "libOpenHistoryCollector.dylib", "foundation-model-worker"]) {
+    const executable = path.join(bundle, name);
     if (!existsSync(executable) || !statSync(executable).isFile()) {
       throw new Error(`Packaged native executable is missing: ${name}`);
     }
@@ -63,9 +58,13 @@ function verifyNativeBundle(bundle) {
       throw new Error(`Packaged native executable is not executable: ${name}`);
     }
   }
-  execFileSync("/usr/libexec/PlistBuddy", [
-    "-c",
-    "Print :CFBundleIdentifier",
-    path.join(bundle, "Contents", "Info.plist")
-  ], { stdio: ["ignore", "pipe", "inherit"] });
+  execFileSync("codesign", ["--verify", "--strict", path.join(bundle, "openhistory-native.node")], {
+    stdio: "inherit"
+  });
+  execFileSync("codesign", ["--verify", "--strict", path.join(bundle, "libOpenHistoryCollector.dylib")], {
+    stdio: "inherit"
+  });
+  execFileSync("codesign", ["--verify", "--strict", path.join(bundle, "foundation-model-worker")], {
+    stdio: "inherit"
+  });
 }

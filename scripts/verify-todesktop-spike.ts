@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { arch as hostArchitecture } from "node:os";
 import { resolve } from "node:path";
@@ -27,7 +27,7 @@ expect(typeof packageJson.author === "string" && /<[^<>\s]+@[^<>\s]+>/.test(pack
 expect(packageJson.scripts?.["todesktop:beforeBuild"] === "./scripts/todesktop-before-build.cjs", "beforeBuild hook must remain configured");
 expect(packageJson.scripts?.["todesktop:afterPack"] === "./scripts/todesktop-after-pack.cjs", "afterPack hook must remain configured");
 expect(packageJson.scripts?.["desktop:package:local"] === "npm run build:electron && npm run package:native:todesktop && node --import tsx scripts/package-local-app.ts", "local desktop packaging command changed");
-expect(packageJson.scripts?.["package:native:todesktop"]?.includes("npm run package:accessibility-spike") === true, "ToDesktop native packaging must build the Accessibility identity spike");
+expect(packageJson.scripts?.["package:native:todesktop"]?.includes("native/bridge/build.sh universal release") === true, "ToDesktop native packaging must build the universal in-process collector bridge");
 expect(packageJson.scripts?.["desktop:smoke-test"]?.includes("smoke-test --ephemeral --latest") === true, "credentialed ToDesktop smoke-test command is missing");
 expect(packageJson.scripts?.["desktop:verify:signed"] === "sh scripts/verify-signed-macos-app.sh", "signed macOS verification command changed");
 expect(config.id === "260815ukaa3eq", "ToDesktop application identifier changed");
@@ -61,7 +61,7 @@ for (const excluded of ["!.todesktop/**", "!native/**", "!scripts/**", "!todeskt
 }
 
 const mainSource = readFileSync(resolve(root, "src/main/index.ts"), "utf8");
-const collectorSource = readFileSync(resolve(root, "src/main/collector-process.ts"), "utf8");
+const collectorSource = readFileSync(resolve(root, "src/main/collector-service.ts"), "utf8");
 const appleSource = readFileSync(resolve(root, "src/main/inference/providers/apple.ts"), "utf8");
 const localPackagerSource = readFileSync(resolve(root, "scripts/package-local-app.ts"), "utf8");
 const beforeBuildSource = readFileSync(resolve(root, "scripts/todesktop-before-build.cjs"), "utf8");
@@ -71,9 +71,9 @@ expect(mainSource.includes("todesktop.init();"), "ToDesktop runtime is not initi
 expect(mainSource.includes("setPermissionCheckHandler(() => false)"), "renderer permission checks must fail closed");
 expect(mainSource.includes("setPermissionRequestHandler"), "renderer permission requests must be denied explicitly");
 expect(mainSource.includes("will-navigate"), "top-level renderer navigation must be guarded");
-expect(collectorSource.includes("native/OpenHistory Collector.app/Contents/MacOS"), "collector does not know the packaged helper path");
-expect(packageJson.scripts?.["package:accessibility-spike"] === "sh native/accessibility-spike/build.sh universal", "Accessibility identity spike build command changed");
-expect(appleSource.includes("native/OpenHistory Collector.app/Contents/MacOS"), "Apple worker does not know the packaged helper path");
+expect(collectorSource.includes('"native", "openhistory-native.node"'), "collector does not know the packaged native module path");
+expect(collectorSource.includes("excludedProcessIdentifiers: [process.pid]"), "collector must exclude its Electron host process");
+expect(appleSource.includes('resolve(process.resourcesPath, "native", name)'), "Apple worker does not know the packaged native worker path");
 expect(localPackagerSource.includes("ignoreOutsideRuntimeAllowlist"), "local package must use a runtime file allowlist");
 expect(localPackagerSource.includes("todesktop-after-pack.cjs"), "local package must exercise the ToDesktop native embedding hook");
 expect(localPackagerSource.includes("OnlyLoadAppFromAsar"), "local package must enforce ASAR-only loading");
@@ -94,39 +94,38 @@ process.stdout.write(`ToDesktop spike verification passed${process.argv.includes
 
 function verifyNativeBundle(): void {
   const architecture = hostArchitecture() === "x64" ? "x64" : "arm64";
-  const bundle = resolve(root, ".todesktop", "native", architecture, "OpenHistory Collector.app");
-  const infoPlist = resolve(bundle, "Contents", "Info.plist");
-  expect(existsSync(infoPlist), "release native helper Info.plist is missing");
-  for (const name of ["activity-collector", "foundation-model-worker"]) {
-    const executable = resolve(bundle, "Contents", "MacOS", name);
-    expect(existsSync(executable) && statSync(executable).isFile(), `${name} is missing from the release helper`);
+  const architectureDirectory = resolve(root, ".todesktop", "native", architecture);
+  const stagingBundle = resolve(architectureDirectory, "OpenHistory Collector.app");
+  const worker = resolve(stagingBundle, "Contents", "MacOS", "foundation-model-worker");
+  expect(existsSync(worker) && statSync(worker).isFile(), "foundation-model-worker is missing from the release staging bundle");
+  if (existsSync(worker)) expect((statSync(worker).mode & 0o111) !== 0, "foundation-model-worker is not executable");
+  for (const name of ["openhistory-native.node", "libOpenHistoryCollector.dylib"]) {
+    const executable = resolve(architectureDirectory, name);
+    expect(existsSync(executable) && statSync(executable).isFile(), `${name} is missing from the release native bridge`);
     if (existsSync(executable)) expect((statSync(executable).mode & 0o111) !== 0, `${name} is not executable`);
+    const signature = spawnSync("codesign", ["--verify", "--strict", executable], { encoding: "utf8" });
+    expect(signature.status === 0, `${name} baseline signature is invalid: ${signature.stderr.trim()}`);
   }
-  if (!existsSync(infoPlist)) return;
 
-  const bundleIdentifier = execFileSync("/usr/libexec/PlistBuddy", [
-    "-c",
-    "Print :CFBundleIdentifier",
-    infoPlist
-  ], { encoding: "utf8" }).trim();
-  expect(bundleIdentifier === "io.github.ztratar.openhistory.collector", "native helper bundle identifier changed");
-
-  const signature = spawnSync("codesign", ["--verify", "--deep", "--strict", bundle], { encoding: "utf8" });
-  expect(signature.status === 0, `local native helper signature is invalid: ${signature.stderr.trim()}`);
-
-  const universalBundle = resolve(root, ".todesktop", "native", "universal", "OpenHistory Collector.app");
-  const universalSignature = spawnSync("codesign", ["--verify", "--deep", "--strict", universalBundle], { encoding: "utf8" });
-  expect(universalSignature.status === 0, `universal ToDesktop helper baseline signature is invalid: ${universalSignature.stderr.trim()}`);
-  for (const name of ["activity-collector", "foundation-model-worker"]) {
-    const executable = resolve(universalBundle, "Contents", "MacOS", name);
-    expect(existsSync(executable) && statSync(executable).isFile(), `${name} is missing from the universal ToDesktop helper`);
+  const universalDirectory = resolve(root, ".todesktop", "native", "universal");
+  for (const name of ["openhistory-native.node", "libOpenHistoryCollector.dylib", "foundation-model-worker"]) {
+    const executable = name === "foundation-model-worker"
+      ? resolve(universalDirectory, "OpenHistory Collector.app", "Contents", "MacOS", name)
+      : resolve(universalDirectory, name);
+    expect(existsSync(executable) && statSync(executable).isFile(), `${name} is missing from the universal ToDesktop native components`);
     if (!existsSync(executable)) continue;
     const architectures = spawnSync("lipo", ["-archs", executable], { encoding: "utf8" });
     expect(architectures.status === 0, `could not inspect ${name} architectures: ${architectures.stderr.trim()}`);
     expect(/\barm64\b/.test(architectures.stdout) && /\bx86_64\b/.test(architectures.stdout), `${name} is not universal`);
   }
 
-  const worker = resolve(bundle, "Contents", "MacOS", "foundation-model-worker");
+  const universalModule = resolve(universalDirectory, "openhistory-native.node");
+  if (existsSync(universalModule)) {
+    const dependencies = spawnSync("otool", ["-L", universalModule], { encoding: "utf8" });
+    expect(dependencies.status === 0, `could not inspect native module dependencies: ${dependencies.stderr.trim()}`);
+    expect(dependencies.stdout.includes("@rpath/libOpenHistoryCollector.dylib"), "native module does not link the embedded collector library through @rpath");
+  }
+
   if (!existsSync(worker)) return;
   const availability = spawnSync(worker, [], {
     input: JSON.stringify({ operation: "availability" }),

@@ -40,13 +40,9 @@ import { pathToFileURL } from "node:url";
 import { AgentAccessStore } from "./agent-access-store";
 import { AgentMcpService } from "./agent-mcp-service";
 import { AgentProjectionStore } from "./agent-projection";
-import {
-  ACCESSIBILITY_IDENTITY_SPIKE_ENABLED,
-  startAccessibilityIdentitySpike
-} from "./accessibility-identity-spike";
 import { ApiKeyStore } from "./api-key-store";
 import { loadApplicationIcon } from "./application-icon";
-import { CollectorProcess } from "./collector-process";
+import { CollectorService } from "./collector-service";
 import { getRuntimeConfig } from "./config";
 import { deleteOwnedDataDirectory, ensureOwnedDataDirectory } from "./data-directory";
 import { sanitizedDiagnostics } from "./diagnostics";
@@ -84,7 +80,7 @@ import todesktop from "@todesktop/runtime";
 todesktop.init();
 
 let mainWindow: BrowserWindow | undefined;
-let collector: CollectorProcess;
+let collector: CollectorService;
 let inference: InferenceService;
 let timeline: TimelineCoordinator;
 let settingsStore: SettingsStore;
@@ -108,7 +104,6 @@ let automaticHistoryTimer: ReturnType<typeof setInterval> | undefined;
 let initialHistoryTimer: ReturnType<typeof setTimeout> | undefined;
 let catchUpHistoryTimer: ReturnType<typeof setTimeout> | undefined;
 let historyBuildPromise: Promise<void> | undefined;
-let stopAccessibilityIdentitySpike: (() => void) | undefined;
 const applicationIconCache = new Map<string, Promise<string | undefined>>();
 
 function rendererUrlIsTrusted(value: string): boolean {
@@ -319,9 +314,7 @@ async function initialize(): Promise<void> {
     inferenceSettings = inferenceSettingsStore.save({ ...inferenceSettings, enabled: false });
   }
   nativeTheme.themeSource = settings.appearanceMode;
-  collector = new CollectorProcess(config.dataDirectory, settings);
-  stopAccessibilityIdentitySpike = startAccessibilityIdentitySpike(config.dataDirectory);
-  if (ACCESSIBILITY_IDENTITY_SPIKE_ENABLED) collector.setEnabled(false);
+  collector = new CollectorService(config.dataDirectory, settings);
   if (settings.privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) collector.setEnabled(false);
   inference = new InferenceService({
     settings: inferenceSettings,
@@ -682,7 +675,6 @@ app.on("before-quit", () => {
   if (automaticHistoryTimer) clearInterval(automaticHistoryTimer);
   if (initialHistoryTimer) clearTimeout(initialHistoryTimer);
   if (catchUpHistoryTimer) clearTimeout(catchUpHistoryTimer);
-  stopAccessibilityIdentitySpike?.();
   collector?.stop();
   void agentMcp?.stop();
 });

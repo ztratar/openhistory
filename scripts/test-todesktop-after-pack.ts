@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,8 +12,7 @@ const destination = resolve(
   application,
   "Contents",
   "Resources",
-  "native",
-  "OpenHistory Collector.app"
+  "native"
 );
 
 try {
@@ -30,25 +28,9 @@ try {
     packager: { appInfo: { productFilename: "OpenHistory" } }
   });
 
-  for (const name of ["activity-collector", "foundation-model-worker"]) {
-    const executable = resolve(destination, "Contents", "MacOS", name);
+  for (const name of ["openhistory-native.node", "libOpenHistoryCollector.dylib", "foundation-model-worker"]) {
+    const executable = resolve(destination, name);
     if (!existsSync(executable)) throw new Error(`afterPack did not embed ${name}`);
-  }
-  const accessibilityProbe = resolve(
-    application,
-    "Contents",
-    "Resources",
-    "native",
-    "accessibility-identity-probe.node"
-  );
-  if (!existsSync(accessibilityProbe)) throw new Error("afterPack did not embed the Accessibility identity spike module");
-  const identifier = execFileSync("/usr/libexec/PlistBuddy", [
-    "-c",
-    "Print :CFBundleIdentifier",
-    resolve(destination, "Contents", "Info.plist")
-  ], { encoding: "utf8" }).trim();
-  if (identifier !== "io.github.ztratar.openhistory.collector") {
-    throw new Error(`afterPack embedded unexpected helper identity: ${identifier}`);
   }
   process.stdout.write("ToDesktop afterPack integration passed with an isolated synthetic app bundle.\n");
 } finally {

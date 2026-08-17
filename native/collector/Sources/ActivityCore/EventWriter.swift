@@ -6,10 +6,18 @@ public final class EventWriter: @unchecked Sendable {
     private let lock = NSLock()
     private var openFilePath: String?
     private var openFileHandle: FileHandle?
+    private let emitToStandardOutput: Bool
+    private let eventHandler: (@Sendable (Data) -> Void)?
 
-    public init(directory: URL) throws {
+    public init(
+        directory: URL,
+        emitToStandardOutput: Bool = true,
+        eventHandler: (@Sendable (Data) -> Void)? = nil
+    ) throws {
         self.directory = directory
         self.encoder = ActivityEventCoding.makeEncoder()
+        self.emitToStandardOutput = emitToStandardOutput
+        self.eventHandler = eventHandler
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o700],
@@ -29,7 +37,8 @@ public final class EventWriter: @unchecked Sendable {
         let handle = try writableHandle(for: fileURL)
         try handle.write(contentsOf: line)
 
-        FileHandle.standardOutput.write(line)
+        if emitToStandardOutput { FileHandle.standardOutput.write(line) }
+        eventHandler?(line)
     }
 
     private func writableHandle(for fileURL: URL) throws -> FileHandle {

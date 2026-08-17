@@ -9,7 +9,7 @@ const REQUIRED_ELECTRON_OUTPUTS = [
 
 module.exports = async ({ appDir, arch }) => {
   if (process.platform !== "darwin") {
-    throw new Error("OpenHistory's ToDesktop spike supports macOS builds only");
+    throw new Error("OpenHistory's ToDesktop packaging supports macOS builds only");
   }
   if (arch !== "arm64" && arch !== "x64") {
     throw new Error(`Unsupported ToDesktop build architecture: ${String(arch)}`);

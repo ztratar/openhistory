@@ -112,11 +112,7 @@ OpenHistory reads ignored local environment files as a fallback. Supplying a key
 
 ### Accessibility permission
 
-Richer context requires macOS Accessibility permission. In OpenHistory, open **Settings** and choose **Grant access**. The development collector has a stable local permission identity at:
-
-```text
-native/collector/.build/debug/OpenHistory Collector.app
-```
+Richer context requires macOS Accessibility permission. In OpenHistory, open **Settings** and choose **Grant access**. The collector runs in the Electron main process, so packaged builds present a single **OpenHistory** Accessibility entry instead of requiring permission for a second helper app.
 
 ## Architecture
 
@@ -124,10 +120,12 @@ native/collector/.build/debug/OpenHistory Collector.app
 macOS Accessibility APIs
           │
           ▼
-Swift collector ──► permission-restricted JSONL
+Electron main process + embedded Swift collector
+          │
+          ├──────────────► permission-restricted JSONL
           │
           ▼
-Electron main process ──► deterministic episodes
+deterministic episodes
           │                      │
           │                      ▼ automatic update
           │          selected inference provider
@@ -159,6 +157,10 @@ See the complete [privacy policy](PRIVACY.md) and [SECURITY.md](SECURITY.md) for
 ```bash
 npm run privacy:scrub-protected -- "/path/to/activity-data"
 ```
+
+Raw JSONL remains the source of truth. Timeline items reference their exact source event IDs, while hourly and daily rollups independently reference revisions of verified timeline items. Stale derived data is not shown or sent back to the model. Existing version-1 data in `memory/` is imported into `daily-rollups/` on first launch after upgrading.
+
+Use **Settings > Data & privacy > Delete all local data** to remove raw activity, summaries, settings, saved keys, and agent connections. OpenHistory confirms the action natively and restarts. For a full uninstall, delete local data first, remove the app, then remove its Accessibility permission in System Settings.
 
 ## Local agent access
 
@@ -194,11 +196,17 @@ npm run build     # Native collector and Electron production bundles
 npm run check     # Complete local quality gate
 ```
 
-To build a complete local application without uploading anything to ToDesktop:
+## Desktop distribution
+
+The repository includes a credential-free local path for testing the ToDesktop packaging and update configuration. It isolates the release CLI from the application dependency tree, builds universal native components, embeds the Swift collector inside Electron's main process, and uses an explicit upload manifest that excludes local data and private evaluation assets. See [the ToDesktop release guide](docs/releasing-todesktop.md).
+
+Build a complete runnable application locally without ToDesktop credentials or an upload:
 
 ```bash
 npm run desktop:package:local
 ```
+
+The verified, ad-hoc-signed application is written under `.todesktop/local/`. It contains only compiled application output, production dependencies, the public icon, the in-process collector bridge, and the Foundation Models worker.
 
 Useful references:
 

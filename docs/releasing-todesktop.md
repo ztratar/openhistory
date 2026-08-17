@@ -1,19 +1,18 @@
-# ToDesktop release spike
+# ToDesktop release process
 
-OpenHistory uses ToDesktop Platform only as an experimental macOS packaging and update path. The integration is linked to the public ToDesktop application ID `260815ukaa3eq`, but it does not contain an access token, signing certificate, or automatic release workflow.
+OpenHistory uses ToDesktop Platform for macOS packaging and updates. The integration is linked to ToDesktop application ID `260815ukaa3eq`, but the repository does not contain an access token or signing certificate.
 
-## What the spike proves locally
+## What the release architecture proves locally
 
-- The Electron application and universal native helper compile locally into a valid uploadable application root, and the remote hooks verify and embed those prebuilt outputs without requiring development or Swift toolchains on ToDesktop's worker.
+- The Electron application and universal native components compile locally into a valid uploadable application root, and the remote hooks verify and embed those prebuilt outputs without requiring development or Swift toolchains on ToDesktop's worker.
 - The ToDesktop CLI can produce its exact source archive without authentication or upload.
 - The archive is controlled by an explicit allowlist. It excludes `.env.local`, activity data, private evaluation corpora, reports, tests, Finder metadata, and unrelated repository content.
-- `activity-collector` and `foundation-model-worker` compile in release mode for ARM64 and x86_64 and can be combined as universal binaries.
-- The native executables are packaged in `OpenHistory Collector.app` with the stable `io.github.ztratar.openhistory.collector` identity.
-- The `afterPack` hook embeds the helper under the main application's resources before ToDesktop applies Electron fuses, Developer ID signing, notarization, and installer creation.
-- The application resolves both the development helper paths and the packaged nested helper paths.
-- A universal Node-API Accessibility identity probe can execute inside the Electron main process, allowing macOS to authorize the permanent `io.github.ztratar.openhistory` identity instead of the nested collector identity.
+- The Swift collector library, Node-API bridge, and Foundation Models worker compile in release mode for ARM64 and x86_64 and can be combined as universal binaries.
+- The Node-API bridge loads the complete Swift collector inside Electron's main process. Accessibility therefore belongs to the permanent `io.github.ztratar.openhistory` application identity.
+- The `afterPack` hook embeds the native module, its Swift dynamic library, and the standalone Foundation Models worker under the main application's resources before ToDesktop applies Electron fuses, Developer ID signing, notarization, and installer creation.
+- The packaged application resolves the native collector module and Foundation Models worker from that resource directory.
 
-The only material question that requires a real ToDesktop build is whether its current macOS worker image supplies the Xcode 26 SDK used by the Foundation Models helper. The production build will fail closed if the Swift build or native embedding fails.
+A real ToDesktop build is still required to prove Developer ID replacement signing, notarization, installer generation, and updates with this native layout. The production build fails closed if native embedding or final signature validation fails.
 
 ## Local verification
 
@@ -30,7 +29,7 @@ Run all application tests plus the distribution-contract checks:
 npm run check
 ```
 
-Build and validate an optimized native helper and exercise the actual `afterPack` hook against a synthetic temporary application bundle:
+Build and validate the optimized native components and exercise the actual `afterPack` hook against a synthetic temporary application bundle:
 
 ```bash
 npm run desktop:verify
@@ -52,7 +51,7 @@ The command prints the architecture-specific `.app` path when it succeeds. Open 
 
 The local packager starts from a strict runtime allowlist, prunes development dependencies, stores the application in ASAR, applies the same security fuses as the ToDesktop configuration, exercises the real `afterPack` native-embedding hook, ad-hoc signs the complete code hierarchy, and verifies the result. The artifact is suitable for local onboarding, permission, collection, inference, persistence, and restart testing. Ad-hoc signing does not test Gatekeeper distribution, Developer ID identity, notarization, installers, or hosted updates.
 
-The archive should contain only compiled Electron output, the prebuilt universal native helper, lifecycle hooks, package metadata, the app icon, and the public license. Electron and Swift source plus development-only build configuration are not uploaded. The helper receives a local ad-hoc baseline signature so ToDesktop can safely traverse its nested code objects; ToDesktop then replaces those signatures with the final Developer ID identity and notarizes the complete app.
+The archive should contain only compiled Electron output, the prebuilt universal native components, lifecycle hooks, package metadata, the app icon, and the public license. Electron and Swift source plus development-only build configuration are not uploaded. Native Mach-O files receive local ad-hoc baseline signatures; ToDesktop must replace those signatures with the final Developer ID identity and notarize the complete app.
 
 ## Native package layout
 
@@ -63,20 +62,16 @@ OpenHistory.app/
   Contents/
     Resources/
       native/
-        accessibility-identity-probe.node
-        OpenHistory Collector.app/
-          Contents/
-            Info.plist
-            MacOS/
-              activity-collector
-              foundation-model-worker
+        openhistory-native.node
+        libOpenHistoryCollector.dylib
+        foundation-model-worker
 ```
 
-The nested bundle and probe carry local ad-hoc baseline signatures when inserted. A remote ToDesktop build must replace them with final Developer ID signatures across the complete nested code hierarchy.
+All three components carry local ad-hoc baseline signatures when inserted. A remote ToDesktop build must replace them with final Developer ID signatures using the same Team ID as the main application.
 
 ## Accessibility identity result
 
-The in-process Accessibility architecture is viable. The spike loads a universal Node-API module in Electron's main process and records only process identity and permission state when `OPENHISTORY_ACCESSIBILITY_IDENTITY_SPIKE=1` is explicitly set. It disables the executable collector during that run so the two identities cannot be confused.
+The in-process Accessibility architecture is implemented. A universal Node-API module loads the complete Swift collector in Electron's main process; there is no separately launched collector executable in the packaged application.
 
 The packaged macOS test established all of the following:
 
@@ -84,10 +79,12 @@ The packaged macOS test established all of the following:
 - `CFBundleGetMainBundle()` reported `io.github.ztratar.openhistory`.
 - `AXIsProcessTrusted()` returned true for that process.
 - A content-free `AXUIElementCopyAttributeValue` call could read the focused application.
-- The app and probe were successfully signed with `Developer ID Application: Zachary Tratar (PNTEN2B9C4)`, shared Team ID `PNTEN2B9C4`, and passed strict deep code-sign verification.
+- The app and native module were successfully signed with `Developer ID Application: Zachary Tratar (PNTEN2B9C4)`, shared Team ID `PNTEN2B9C4`, and passed strict deep code-sign verification.
 - System Settings displayed one enabled `OpenHistory` Accessibility entry and no `OpenHistory Collector` entry.
+- After resetting the application's TCC record, **Grant access** created one disabled `OpenHistory` row; enabling it was detected without relaunching and restarted the embedded collector with Accessibility and pointer capture available.
+- Pausing and resuming collection retained the single-process layout and produced live window, URL, pointer, focused-element, UI-snapshot, and text-input events.
 
-This proves that moving the collector engine into a native module loaded by Electron can provide the intended single-permission experience. It does not yet prove the full collector refactor, the first-run prompt on a clean TCC database, ToDesktop notarization of the new module, or authorization persistence across a signed auto-update. Those remain release gates for the implementation.
+The remaining release gates are ToDesktop Developer ID signing/notarization of every native component and authorization persistence across a signed auto-update.
 
 ## Credentialed build
 
@@ -125,7 +122,7 @@ After downloading and extracting the private artifact, run the automated macOS d
 npm run desktop:verify:signed -- "/path/to/OpenHistory.app"
 ```
 
-It requires the permanent main and nested bundle identifiers, Developer ID Application signatures, secure timestamps, hardened runtime, matching Team IDs, strict code-sign verification, Gatekeeper acceptance, and a stapled notarization ticket. Preserve its output with the build ID and source commit.
+It requires the permanent main bundle identifier, Developer ID Application signatures on the app and every native component, secure timestamps, hardened runtime, matching Team IDs, strict code-sign verification, Gatekeeper acceptance, and a stapled notarization ticket. Preserve its output with the build ID and source commit.
 
 Then verify behavior on a clean test account or separate Mac, using the artifact as downloaded so the quarantine attribute is present:
 
@@ -135,7 +132,7 @@ Then verify behavior on a clean test account or separate Mac, using the artifact
 4. Apple on-device availability on a compatible macOS 26 Mac.
 5. Cloud-key storage and a generated timeline/hour/day sequence.
 6. Sleep/wake, lock/unlock, and login-item behavior.
-7. Collector replacement without a duplicate or orphaned process.
+7. Collector startup, pause/resume, and settings changes without a duplicate process or second Accessibility entry.
 8. Complete uninstall/reinstall without unexpected loss of user-owned local data.
 
 Run ToDesktop's launch and update smoke test when the selected plan supports it:
@@ -164,8 +161,9 @@ The isolated CLI has four moderate transitive advisories in its legacy version-c
 
 - `todesktop.ts` — app identity, explicit upload manifest, fuses, resources, and macOS settings.
 - `scripts/todesktop-before-build.cjs` — remote Electron compilation and macOS-only enforcement.
-- `scripts/todesktop-after-pack.cjs` — release Swift build and nested helper embedding.
-- `native/collector/scripts/package-release-app.sh` — ARM64, x86_64, and universal helper packaging.
+- `scripts/todesktop-after-pack.cjs` — native component embedding.
+- `native/bridge/build.sh` — ARM64, x86_64, and universal in-process collector bridge builds.
+- `native/collector/scripts/package-release-app.sh` — Foundation Models worker staging.
 - `scripts/verify-todesktop-spike.ts` — static distribution and privacy invariants.
 - `scripts/verify-signed-macos-app.sh` — Developer ID, hardened-runtime, Gatekeeper, Team ID, and notarization-ticket gate for downloaded artifacts.
 - `scripts/test-todesktop-after-pack.ts` — synthetic integration test for the actual packaging hook.
