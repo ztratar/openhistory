@@ -1,12 +1,14 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import type { AppleInferenceUnavailabilityReason } from "@shared/inference";
 import type { InferenceProviderAdapter, StructuredGenerationRequest } from "../contracts";
 
 export interface AppleWorkerResponse {
   ok: boolean;
   available?: boolean;
   reason?: string;
+  reasonCode?: AppleInferenceUnavailabilityReason;
   output?: string;
   durationMilliseconds?: number;
 }
@@ -14,6 +16,7 @@ export interface AppleWorkerResponse {
 export interface AppleModelAvailability {
   available: boolean;
   reason?: string;
+  reasonCode?: AppleInferenceUnavailabilityReason;
   executable?: string;
 }
 
@@ -23,12 +26,17 @@ export function probeAppleFoundationModel(
   executable = findFoundationModelExecutable()
 ): AppleModelAvailability {
   if (process.platform !== "darwin") {
-    return { available: false, reason: "Apple's on-device model is available only on macOS." };
+    return {
+      available: false,
+      reason: "Apple's on-device model is available only on macOS.",
+      reasonCode: "unsupportedPlatform"
+    };
   }
   if (!executable) {
     return {
       available: false,
-      reason: "The on-device model helper is missing. Rebuild OpenHistory with Xcode 26 or later."
+      reason: "The on-device model helper is missing. Rebuild OpenHistory with Xcode 26 or later.",
+      reasonCode: "helperMissing"
     };
   }
   const result = spawnSync(executable, [], {
@@ -36,16 +44,29 @@ export function probeAppleFoundationModel(
     encoding: "utf8",
     timeout: 5_000
   });
-  if (result.error) return { available: false, reason: result.error.message, executable };
+  if (result.error) {
+    return {
+      available: false,
+      reason: result.error.message,
+      reasonCode: "workerLaunchFailed",
+      executable
+    };
+  }
   try {
     const response = JSON.parse(result.stdout.trim()) as AppleWorkerResponse;
     return {
       available: response.ok && response.available === true,
       ...(response.reason ? { reason: response.reason } : {}),
+      ...(response.reasonCode ? { reasonCode: response.reasonCode } : {}),
       executable
     };
   } catch {
-    return { available: false, reason: "The on-device model helper returned an invalid status.", executable };
+    return {
+      available: false,
+      reason: "The on-device model helper returned an invalid status.",
+      reasonCode: "invalidWorkerResponse",
+      executable
+    };
   }
 }
 

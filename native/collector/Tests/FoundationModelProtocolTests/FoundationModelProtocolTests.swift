@@ -31,7 +31,11 @@ import Testing
 
 @Test func encodesSuccessFailureAndAvailabilityWithoutChangingKeys() throws {
     let responses: [FoundationModelWorkerResponse] = [
-        .status(available: false, reason: "Model is unavailable."),
+        .status(
+            available: false,
+            reason: "Apple Intelligence is turned off.",
+            reasonCode: .appleIntelligenceNotEnabled
+        ),
         .success(output: #"{"title":"Synthetic"}"#, durationMilliseconds: 42),
         .failure("Synthetic failure")
     ]
@@ -41,7 +45,8 @@ import Testing
     }
     #expect(objects[0]["ok"] as? Bool == true)
     #expect(objects[0]["available"] as? Bool == false)
-    #expect(objects[0]["reason"] as? String == "Model is unavailable.")
+    #expect(objects[0]["reason"] as? String == "Apple Intelligence is turned off.")
+    #expect(objects[0]["reasonCode"] as? String == "appleIntelligenceNotEnabled")
     #expect(objects[1]["output"] as? String == #"{"title":"Synthetic"}"#)
     #expect(objects[1]["durationMilliseconds"] as? Int == 42)
     #expect(objects[2]["ok"] as? Bool == false)

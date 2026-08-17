@@ -31,7 +31,11 @@ private enum FoundationModelWorker {
         if #available(macOS 26.0, *) {
             let availability = modelAvailability()
             if request.operation == "availability" {
-                return .status(available: availability.available, reason: availability.reason)
+                return .status(
+                    available: availability.available,
+                    reason: availability.reason,
+                    reasonCode: availability.reasonCode
+                )
             }
             guard availability.available else {
                 return .failure(availability.reason ?? "Apple's on-device model is unavailable.")
@@ -52,12 +56,23 @@ private enum FoundationModelWorker {
             let milliseconds = Int(components.seconds * 1_000) + Int(components.attoseconds / 1_000_000_000_000_000)
             return .success(output: output, durationMilliseconds: milliseconds)
         }
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        let currentVersion = "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+        let versionReason = "This Mac is running macOS \(currentVersion). Apple On-Device requires macOS 26 or later."
         return request.operation == "availability"
-            ? .status(available: false, reason: "macOS 26 or later is required.")
-            : .failure("macOS 26 or later is required.")
+            ? .status(
+                available: false,
+                reason: versionReason,
+                reasonCode: .unsupportedOperatingSystem
+            )
+            : .failure(versionReason)
 #else
         return request.operation == "availability"
-            ? .status(available: false, reason: "This build was compiled without the Foundation Models framework. Build with Xcode 26 or later.")
+            ? .status(
+                available: false,
+                reason: "This build was compiled without the Foundation Models framework. Build with Xcode 26 or later.",
+                reasonCode: .foundationModelsFrameworkMissing
+            )
             : .failure("This build was compiled without the Foundation Models framework. Build with Xcode 26 or later.")
 #endif
     }
@@ -65,18 +80,22 @@ private enum FoundationModelWorker {
 
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
-private func modelAvailability() -> (available: Bool, reason: String?) {
+private func modelAvailability() -> (
+    available: Bool,
+    reason: String?,
+    reasonCode: FoundationModelUnavailabilityReason?
+) {
     switch SystemLanguageModel.default.availability {
     case .available:
-        return (true, nil)
+        return (true, nil, nil)
     case .unavailable(.appleIntelligenceNotEnabled):
-        return (false, "Apple Intelligence is not enabled on this Mac.")
+        return (false, "Apple Intelligence is turned off on this Mac.", .appleIntelligenceNotEnabled)
     case .unavailable(.deviceNotEligible):
-        return (false, "This Mac does not support Apple Intelligence.")
+        return (false, "This Mac does not support Apple Intelligence.", .deviceNotEligible)
     case .unavailable(.modelNotReady):
-        return (false, "Apple's on-device model is not ready yet.")
+        return (false, "Apple Intelligence is still preparing its on-device model.", .modelNotReady)
     case .unavailable:
-        return (false, "Apple's on-device model is unavailable.")
+        return (false, "Apple's on-device model is unavailable.", .foundationModelsUnavailable)
     }
 }
 

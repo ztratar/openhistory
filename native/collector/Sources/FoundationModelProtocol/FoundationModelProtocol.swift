@@ -11,6 +11,15 @@ public enum FoundationModelOperation: String, CaseIterable, Codable, Sendable {
     case dailyRollupCompact = "daily_rollup_compact"
 }
 
+public enum FoundationModelUnavailabilityReason: String, Codable, Sendable {
+    case unsupportedOperatingSystem
+    case appleIntelligenceNotEnabled
+    case deviceNotEligible
+    case modelNotReady
+    case foundationModelsUnavailable
+    case foundationModelsFrameworkMissing
+}
+
 public struct FoundationModelWorkerRequest: Codable, Equatable, Sendable {
     public let operation: String
     public let instructions: String?
@@ -49,6 +58,7 @@ public struct FoundationModelWorkerResponse: Codable, Equatable, Sendable {
     public let ok: Bool
     public let available: Bool?
     public let reason: String?
+    public let reasonCode: FoundationModelUnavailabilityReason?
     public let output: String?
     public let durationMilliseconds: Int?
 
@@ -56,18 +66,24 @@ public struct FoundationModelWorkerResponse: Codable, Equatable, Sendable {
         ok: Bool,
         available: Bool? = nil,
         reason: String? = nil,
+        reasonCode: FoundationModelUnavailabilityReason? = nil,
         output: String? = nil,
         durationMilliseconds: Int? = nil
     ) {
         self.ok = ok
         self.available = available
         self.reason = reason
+        self.reasonCode = reasonCode
         self.output = output
         self.durationMilliseconds = durationMilliseconds
     }
 
-    public static func status(available: Bool, reason: String? = nil) -> Self {
-        Self(ok: true, available: available, reason: reason)
+    public static func status(
+        available: Bool,
+        reason: String? = nil,
+        reasonCode: FoundationModelUnavailabilityReason? = nil
+    ) -> Self {
+        Self(ok: true, available: available, reason: reason, reasonCode: reasonCode)
     }
 
     public static func success(output: String, durationMilliseconds: Int) -> Self {
