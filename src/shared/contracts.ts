@@ -9,6 +9,8 @@ export const CURRENT_PRIVACY_NOTICE_VERSION = 1;
 export const CURRENT_INFERENCE_ONBOARDING_VERSION = 1;
 
 export type CollectorState = "starting" | "running" | "paused" | "stopped" | "failed";
+export const APP_PRESENTATION_MODES = ["dock", "menuBar"] as const;
+export type AppPresentationMode = (typeof APP_PRESENTATION_MODES)[number];
 
 export const IPC_CHANNELS = {
   getBootstrap: "openhistory:get-bootstrap",
@@ -22,6 +24,8 @@ export const IPC_CHANNELS = {
   refreshAppleAvailability: "openhistory:refresh-apple-availability",
   authorizeCloudInference: "openhistory:authorize-cloud-inference",
   requestAccessibility: "openhistory:request-accessibility",
+  refreshAccessibility: "openhistory:refresh-accessibility",
+  openAccessibilitySettings: "openhistory:open-accessibility-settings",
   revealDataDirectory: "openhistory:reveal-data-directory",
   deleteAllData: "openhistory:delete-all-data",
   exportDiagnostics: "openhistory:export-diagnostics",
@@ -36,7 +40,9 @@ export const IPC_CHANNELS = {
   timelineState: "openhistory:timeline-state",
   hourState: "openhistory:hour-state",
   dailyRollupState: "openhistory:daily-rollup-state",
-  agentAccessState: "openhistory:agent-access-state"
+  agentAccessState: "openhistory:agent-access-state",
+  bootstrapState: "openhistory:bootstrap-state",
+  openSettings: "openhistory:open-settings"
 } as const;
 
 export interface ApplicationDescriptor {
@@ -187,6 +193,7 @@ export interface CollectionSettings {
   inferenceOnboardingVersion: number;
   cloudInferenceConsents: CloudInferenceProvider[];
   appearanceMode: "system" | "light" | "dark";
+  appPresentationMode: AppPresentationMode;
   captureWindowTitles: boolean;
   captureFocusedElements: boolean;
   captureTextInput: boolean;
@@ -288,6 +295,8 @@ export interface OpenHistoryBridge {
   refreshAppleAvailability(): Promise<BootstrapState>;
   authorizeCloudInference(provider: CloudInferenceProvider): Promise<BootstrapState>;
   requestAccessibilityPermission(): Promise<BootstrapState>;
+  refreshAccessibilityPermission(): Promise<BootstrapState>;
+  openAccessibilitySettings(): Promise<void>;
   revealDataDirectory(): Promise<void>;
   deleteAllData(): Promise<boolean>;
   exportDiagnostics(): Promise<boolean>;
@@ -303,6 +312,8 @@ export interface OpenHistoryBridge {
   onHourState(listener: (state: HourState) => void): () => void;
   onDailyRollupState(listener: (state: DailyRollupState) => void): () => void;
   onAgentAccessState(listener: (state: AgentAccessState) => void): () => void;
+  onBootstrapState(listener: (state: BootstrapState) => void): () => void;
+  onOpenSettings(listener: () => void): () => void;
 }
 
 export interface InferenceOnboardingSelection {
@@ -311,4 +322,5 @@ export interface InferenceOnboardingSelection {
   apiKey?: string;
   captureEmailActivity?: boolean;
   captureMessagingActivity?: boolean;
+  appPresentationMode?: AppPresentationMode;
 }

@@ -3,6 +3,7 @@ import {
   CURRENT_PRIVACY_NOTICE_VERSION,
   IPC_CHANNELS,
   type AgentAccessState,
+  type AppPresentationMode,
   type BootstrapState,
   type CollectionSettings,
   type HistoryChatTurn,
@@ -28,9 +29,13 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  Menu,
+  nativeImage,
   nativeTheme,
   safeStorage,
+  screen,
   shell,
+  Tray,
   type IpcMainInvokeEvent
 } from "electron";
 import { existsSync } from "node:fs";
@@ -80,6 +85,10 @@ import todesktop from "@todesktop/runtime";
 todesktop.init();
 
 let mainWindow: BrowserWindow | undefined;
+let tray: Tray | undefined;
+let appPresentationMode: AppPresentationMode = "dock";
+let isQuitting = false;
+let menuBarPositionTimer: ReturnType<typeof setTimeout> | undefined;
 let collector: CollectorService;
 let inference: InferenceService;
 let timeline: TimelineCoordinator;
@@ -136,16 +145,28 @@ function openHistoryIconPath(): string | undefined {
   return candidates.find(existsSync);
 }
 
-function createWindow(): void {
+function createWindow(mode: AppPresentationMode, showWhenReady = mode === "dock"): void {
   const useNativeVibrancy = process.platform === "darwin";
   const icon = openHistoryIconPath();
-  mainWindow = new BrowserWindow({
-    width: 480,
-    height: 694,
-    minWidth: 400,
-    minHeight: 560,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 16 },
+  const menuBarMode = mode === "menuBar";
+  const window = new BrowserWindow({
+    width: menuBarMode ? 440 : 480,
+    height: menuBarMode ? 660 : 694,
+    minWidth: menuBarMode ? 440 : 400,
+    minHeight: menuBarMode ? 660 : 560,
+    show: false,
+    ...(menuBarMode ? {
+      frame: false,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      roundedCorners: true
+    } : {
+      titleBarStyle: "hiddenInset" as const,
+      trafficLightPosition: { x: 16, y: 16 }
+    }),
     transparent: useNativeVibrancy,
     backgroundColor: useNativeVibrancy ? "#00000000" : "#f6f5f1",
     ...(icon ? { icon } : {}),
@@ -160,33 +181,213 @@ function createWindow(): void {
       sandbox: true
     }
   });
+  mainWindow = window;
 
-  mainWindow.webContents.session.setPermissionCheckHandler(() => false);
-  mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
+  window.webContents.session.setPermissionCheckHandler(() => false);
+  window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  window.webContents.setWindowOpenHandler(({ url }) => {
     const externalUrl = safeExternalHttpsUrl(url);
     if (externalUrl) void shell.openExternal(externalUrl);
     return { action: "deny" };
   });
-  mainWindow.webContents.on("will-navigate", (event, url) => {
+  window.webContents.on("will-navigate", (event, url) => {
     if (rendererUrlIsTrusted(url)) return;
     event.preventDefault();
     const externalUrl = safeExternalHttpsUrl(url);
     if (externalUrl) void shell.openExternal(externalUrl);
   });
-  mainWindow.webContents.on("will-redirect", (event, url) => {
+  window.webContents.on("will-redirect", (event, url) => {
     if (rendererUrlIsTrusted(url)) return;
     event.preventDefault();
   });
-  mainWindow.on("closed", () => { mainWindow = undefined; });
+  window.webContents.on("before-input-event", (event, input) => {
+    if (menuBarMode && input.type === "keyDown" && input.key === "Escape") {
+      event.preventDefault();
+      window.hide();
+    }
+  });
+  window.on("blur", () => {
+    if (menuBarMode && !isQuitting) window.hide();
+  });
+  window.on("closed", () => {
+    if (mainWindow === window) mainWindow = undefined;
+  });
+  window.once("ready-to-show", () => {
+    if (!showWhenReady) return;
+    if (menuBarMode) {
+      showMenuBarWindowWhenAnchored();
+    } else {
+      window.show();
+      window.focus();
+    }
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
+    void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    void mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
+    void window.loadFile(join(__dirname, "../renderer/index.html"));
   }
+}
+
+type TrayState = "capturing" | "paused" | "attention";
+
+const TRAY_IMAGE_DATA: Record<TrayState, string> = {
+  capturing: "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAIKADAAQAAAABAAAAIAAAAACPTkDJAAAB90lEQVRYCe2WPU4DMRSEw0/2CAREjThDrsAFUJo0iBQUHIcKOAIlZSKl4RCINvy0UCEFmA/tIGPsbDYiWpAy0sjP9nvj59/dVmuFhldgbcHxNxS3XRKJh5JTKstCW8J98Up8Ft8j0kYfPvj+KnpSuxPjQXN1fImpRNUWFFI4E48CpUfZ1+KNeF+276jsigdip2yjuBBPxFcqdcHgI9GznMgeiJtiDvThg6/jhrILsTbOFWGRseytGgr4EuN4tGqB/XMwQovMgJgwibnOBFlygn3gWMo6Myc+BLFoMBk057odXCPPfiA7h3V17JfEzgEN66FdCe4yATwuuQN3qD5ug4WxaUsBDbTwRXsmcPYjc5nxZCAPHJe5JNDCF21e0Sx21WPR44QXSx3O3L4u6UttB1r2YYwvxM6874YfGdcp98RZh5I+fGKEWuEYyWzj4KXW4xXgsBg8rzFu1fAUNwZ1+vCJEWqFY/xYAfbwpYzuxiqqv4mniXY30YdPDGuh/S2B2JF6o9eQBPqiT2wjD1FbCTT6FLMKvWAVxrILGmuCGGK9mmjWQqOfYzJlBiPRM5jIHoi574O6PvvwwddxQ9mFmMSf/iULM2b/fDA9s1klvrX3PBwwZXM7uKK8E/5ihkks9FtetQWpRGjjHHREf1h43eBUXOF/rcAHyJy5hT/qObAAAAAASUVORK5CYII=",
+  paused: "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAIKADAAQAAAABAAAAIAAAAACPTkDJAAACAElEQVRYCe2WO05CQRiF8UVl7WMpLMDGHdBYaELhZuysdAvGisZEDI2tG7BFrbUyEj0fzrkZxnuBgWug4CSHefz/f/4Z5nUbjTWW/A9szJl/S3EHgUi8Bg5p/Bd2JHwi3ojv4ndC+rDhg2+taEvtWUyTVrXxJWYqpi1BUwqX4lmk9KZ6V3wUX0L/ocqWeCzuhz6Ka/Fc/KSRC5L3RM9yoHpH3BargA0ffB13r3pTzMaVIizSV30vQwFfYhyPVhZYPwcjNM8MiIkHMdOeYJTsYG84/sqcmRMfg1g0mAyaM50OjpFn31E9xYU6eiKlUdZnGxrWQ3sqOMsEcLmUbTiSY6c0yvpsQwMtYtAew+ZY6zfhUejrqvxK7PM00UALoM0tWiAdAGd4N1g553XBWmhzhRdIBxAbfckUzgtUYq04RyMdwAI55gtNB8BmMbhe60KsFef48w9wz3+ErK26skvHWmhPHAA79i4k5mEpO4bBPHOBBloA7eGoFn7SJaD7Ntg4EaehHhdPajyIlEZZn21o+IW0tm2l5dKvYkbVFrm5YF9sirkghljroJkFnlAHI5TzKOEbJ0crG8ygJ3oQA9U74qSNiQ0ffB038YNkpT/JNIkCrJ+/ETyzSSW+2WteZKuocDp4z2v9LJ+2BBVjGe0DzrYfFm43OHbJVAWv+1fqH/gBwU6fXzDlm+0AAAAASUVORK5CYII=",
+  attention: "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAIKADAAQAAAABAAAAIAAAAACPTkDJAAAB60lEQVRYCe2WvU7DMBSFw18nJDZ+noK5ExMLb9CFAaQMPBATvAJi6kikLjwFa4EZJkQF5wPfyDF1EqdB7dAjHeXGvvdcO7avk2VrLPkLbHTMv6W4Q0ckXhxnvPwXdiR8Lt6Jb+JXQNrowwffXjGS2pMYJo2940tMI5qWYCCFa/HSU3qVPRYfxWfXfqTnUDwTD1wbj1vxSvzgJRUkL0Sb5VR2Lm6LMdCHD74W9yB7ICbjRhEmMpG9n6CALzEWj1YSWD8LRqjLDIjxB9FqTzBKdrBtOD5lysyJ90EsGkwGzVang2Nks89lx7CnjhNH7BjQMD20G8FZJoDiUrfhSG7C2DGggRa+aFewWXn7TXjq2sZ6fgb9XV7RQAugTRUtEQ6AM7zrejnnfcG00KaElwgH4HdakSmdFzB8LT9HFg5ggRzdQsMBsFkMlNe+4Gv5Of58Aer8u8s67Cu7dEwL7coA5uVoewyPFVw4YseQdAwRuXdKnIgLZy/yQMNuSNOu1Wtbiik+FBeIPQ+dSjFCI9HEJ7IHNAZoWgJiiDUdNJOw1OuYkTKDQrQZTGXnYt39QB8++Fpc7Q/JSv+SaRIlWD/7R7CZ1T3xTV7zMlvE4HRwn1Mnevstb1qCyFh+9gFn2y4WqhucxQLW7Sv7Bb4Bg2icXJc3aZ8AAAAASUVORK5CYII="
+};
+
+function trayState(): TrayState {
+  if (!collector.enabled) return "paused";
+  if (!collector.accessibilityTrusted || collector.state === "failed") return "attention";
+  return "capturing";
+}
+
+function trayStateLabel(state: TrayState): string {
+  if (state === "capturing") return "Capturing activity";
+  if (state === "paused") return "Capture paused";
+  return "Capture needs attention";
+}
+
+function trayImage(state: TrayState): Electron.NativeImage {
+  const image = nativeImage.createFromDataURL(`data:image/png;base64,${TRAY_IMAGE_DATA[state]}`)
+    .resize({ width: 20, height: 20 });
+  image.setTemplateImage(true);
+  return image;
+}
+
+function positionMenuBarWindow(): boolean {
+  if (!tray || !mainWindow || mainWindow.isDestroyed()) return false;
+  const trayBounds = tray.getBounds();
+  if (trayBounds.width <= 0 || trayBounds.height <= 0) return false;
+  const windowBounds = mainWindow.getBounds();
+  const workArea = screen.getDisplayMatching(trayBounds).workArea;
+  const margin = 8;
+  const centeredX = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
+  const x = Math.max(
+    workArea.x + margin,
+    Math.min(centeredX, workArea.x + workArea.width - windowBounds.width - margin)
+  );
+  const y = workArea.y + 8;
+  mainWindow.setPosition(x, y, false);
+  return true;
+}
+
+function clearMenuBarPositionTimer(): void {
+  if (!menuBarPositionTimer) return;
+  clearTimeout(menuBarPositionTimer);
+  menuBarPositionTimer = undefined;
+}
+
+function showMenuBarWindowWhenAnchored(attempt = 0): void {
+  clearMenuBarPositionTimer();
+  if (appPresentationMode !== "menuBar" || !mainWindow || mainWindow.isDestroyed()) return;
+  if (positionMenuBarWindow()) {
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+  if (attempt >= 40) return;
+  menuBarPositionTimer = setTimeout(() => {
+    menuBarPositionTimer = undefined;
+    showMenuBarWindowWhenAnchored(attempt + 1);
+  }, 50);
+}
+
+function showMenuBarWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow("menuBar", true);
+  else showMenuBarWindowWhenAnchored();
+}
+
+function toggleMenuBarWindow(): void {
+  if (mainWindow?.isVisible()) mainWindow.hide();
+  else showMenuBarWindow();
+}
+
+function sendBootstrapState(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send(IPC_CHANNELS.bootstrapState, bootstrapState());
+}
+
+function toggleCollectionFromTray(): void {
+  const current = settingsStore.load();
+  if (!collector.enabled && current.privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) {
+    showMenuBarWindow();
+    return;
+  }
+  collector.setEnabled(!collector.enabled);
+  refreshTray();
+  sendBootstrapState();
+}
+
+function openSettingsFromTray(): void {
+  showMenuBarWindow();
+  if (!mainWindow) return;
+  if (mainWindow.webContents.isLoadingMainFrame()) {
+    mainWindow.webContents.once("did-finish-load", () => {
+      mainWindow?.webContents.send(IPC_CHANNELS.openSettings);
+    });
+  } else {
+    mainWindow.webContents.send(IPC_CHANNELS.openSettings);
+  }
+}
+
+function refreshTray(): void {
+  if (!tray) return;
+  const state = trayState();
+  tray.setImage(trayImage(state));
+  tray.setPressedImage(trayImage(state));
+  tray.setToolTip(`OpenHistory — ${trayStateLabel(state)}`);
+}
+
+function showTrayContextMenu(): void {
+  if (!tray) return;
+  const state = trayState();
+  tray.popUpContextMenu(Menu.buildFromTemplate([
+    { label: trayStateLabel(state), enabled: false },
+    { type: "separator" },
+    { label: mainWindow?.isVisible() ? "Hide OpenHistory" : "Show OpenHistory", click: toggleMenuBarWindow },
+    { label: collector.enabled ? "Pause Capture" : "Resume Capture", click: toggleCollectionFromTray },
+    { label: "Settings…", click: openSettingsFromTray },
+    { type: "separator" },
+    { label: "Quit OpenHistory", role: "quit" }
+  ]));
+}
+
+function ensureTray(): void {
+  if (tray) return;
+  tray = new Tray(trayImage(trayState()));
+  tray.on("click", toggleMenuBarWindow);
+  tray.on("right-click", showTrayContextMenu);
+  refreshTray();
+}
+
+function destroyTray(): void {
+  clearMenuBarPositionTimer();
+  tray?.destroy();
+  tray = undefined;
+}
+
+function recreateWindow(mode: AppPresentationMode, showWhenReady: boolean): void {
+  const previous = mainWindow;
+  mainWindow = undefined;
+  previous?.destroy();
+  createWindow(mode, showWhenReady);
+}
+
+function applyAppPresentationMode(mode: AppPresentationMode, showWhenReady = false): void {
+  clearMenuBarPositionTimer();
+  appPresentationMode = mode;
+  if (mode === "menuBar") {
+    ensureTray();
+    app.dock?.hide();
+  } else {
+    destroyTray();
+    void app.dock?.show();
+  }
+  recreateWindow(mode, showWhenReady || mode === "dock");
 }
 
 function bootstrapState(): BootstrapState {
@@ -310,6 +511,7 @@ async function initialize(): Promise<void> {
   inferenceSettings = inferenceSettingsStore.load();
   settingsStore = new SettingsStore(config.dataDirectory);
   const settings = settingsStore.load();
+  appPresentationMode = settings.appPresentationMode;
   if (cloudInferenceNeedsConsent(inferenceSettings, settings)) {
     inferenceSettings = inferenceSettingsStore.save({ ...inferenceSettings, enabled: false });
   }
@@ -390,6 +592,7 @@ async function initialize(): Promise<void> {
       throw new Error("Accept the privacy notice before starting activity capture");
     }
     collector.setEnabled(Boolean(enabled));
+    refreshTray();
     return bootstrapState();
   });
   handleTrustedIpc(IPC_CHANNELS.updateCollectionSettings, async (_event, settings: CollectionSettings) => {
@@ -402,6 +605,7 @@ async function initialize(): Promise<void> {
     });
     nativeTheme.themeSource = saved.appearanceMode;
     collector.setSettings(saved);
+    const presentationModeChanged = current.appPresentationMode !== saved.appPresentationMode;
     const privacyBecameMoreRestrictive =
       (current.captureEmailActivity && !saved.captureEmailActivity) ||
       (current.captureMessagingActivity && !saved.captureMessagingActivity);
@@ -423,7 +627,11 @@ async function initialize(): Promise<void> {
       sendDerivedState();
       buildHistoryIfNeeded();
     }
-    return bootstrapState();
+    const nextState = bootstrapState();
+    if (presentationModeChanged) {
+      setTimeout(() => applyAppPresentationMode(saved.appPresentationMode, true), 100);
+    }
+    return nextState;
   });
   handleTrustedIpc(IPC_CHANNELS.updateInferenceSettings, async (_event, next: InferenceSettings) => {
     if (next.enabled && settingsStore.load().privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) {
@@ -517,11 +725,16 @@ async function initialize(): Promise<void> {
       ...settings,
       inferenceOnboardingVersion: CURRENT_INFERENCE_ONBOARDING_VERSION,
       captureEmailActivity: selection.captureEmailActivity === true,
-      captureMessagingActivity: selection.captureMessagingActivity === true
+      captureMessagingActivity: selection.captureMessagingActivity === true,
+      appPresentationMode: selection.appPresentationMode ?? "dock"
     });
     collector.setSettings(savedSettings);
     buildHistoryIfNeeded();
-    return bootstrapState();
+    const nextState = bootstrapState();
+    if (current.appPresentationMode !== savedSettings.appPresentationMode) {
+      setTimeout(() => applyAppPresentationMode(savedSettings.appPresentationMode, true), 100);
+    }
+    return nextState;
   });
   handleTrustedIpc(IPC_CHANNELS.authorizeCloudInference, (
     _event,
@@ -543,7 +756,18 @@ async function initialize(): Promise<void> {
       throw new Error("Accept the privacy notice before requesting activity access");
     }
     collector.requestAccessibilityPermission();
+    refreshTray();
     return bootstrapState();
+  });
+  handleTrustedIpc(IPC_CHANNELS.refreshAccessibility, () => {
+    collector.refreshAccessibilityPermission();
+    refreshTray();
+    return bootstrapState();
+  });
+  handleTrustedIpc(IPC_CHANNELS.openAccessibilitySettings, async () => {
+    await shell.openExternal(
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    );
   });
   handleTrustedIpc(IPC_CHANNELS.revealDataDirectory, async () => {
     await shell.openPath(config.dataDirectory);
@@ -629,12 +853,20 @@ async function initialize(): Promise<void> {
 
   collector.on("event", (event) => {
     mainWindow?.webContents.send(IPC_CHANNELS.activityEvent, event);
+    if (event.kind === "collector_started") refreshTray();
   });
   collector.on("state", (state) => {
     mainWindow?.webContents.send(IPC_CHANNELS.collectorState, state);
+    refreshTray();
   });
 
-  createWindow();
+  if (appPresentationMode === "menuBar") {
+    ensureTray();
+    app.dock?.hide();
+    createWindow("menuBar", false);
+  } else {
+    createWindow("dock", true);
+  }
   if (settings.privacyNoticeVersion >= CURRENT_PRIVACY_NOTICE_VERSION) collector.start();
   derivedStateTimer = setInterval(() => {
     if (mainWindow && !mainWindow.isDestroyed()) sendDerivedState();
@@ -643,7 +875,12 @@ async function initialize(): Promise<void> {
   automaticHistoryTimer = setInterval(buildHistoryIfNeeded, AUTOMATIC_HISTORY_INTERVAL_MS);
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (appPresentationMode === "menuBar") showMenuBarWindow();
+    else if (BrowserWindow.getAllWindows().length === 0) createWindow("dock", true);
+    else {
+      mainWindow?.show();
+      mainWindow?.focus();
+    }
   });
 }
 
@@ -665,6 +902,11 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {
+    if (appPresentationMode === "menuBar") {
+      showMenuBarWindow();
+      return;
+    }
+    if (!mainWindow) createWindow("dock", true);
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
@@ -679,6 +921,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on("before-quit", () => {
+  isQuitting = true;
   if (derivedStateTimer) clearInterval(derivedStateTimer);
   if (automaticHistoryTimer) clearInterval(automaticHistoryTimer);
   if (initialHistoryTimer) clearTimeout(initialHistoryTimer);

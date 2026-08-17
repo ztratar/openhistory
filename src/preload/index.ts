@@ -2,6 +2,7 @@ import {
   IPC_CHANNELS,
   type ActivityEvent,
   type AgentAccessState,
+  type BootstrapState,
   type OpenHistoryBridge,
   type HourState,
   type DailyRollupState,
@@ -29,6 +30,8 @@ const bridge: OpenHistoryBridge = {
   authorizeCloudInference: (provider) =>
     ipcRenderer.invoke(IPC_CHANNELS.authorizeCloudInference, provider),
   requestAccessibilityPermission: () => ipcRenderer.invoke(IPC_CHANNELS.requestAccessibility),
+  refreshAccessibilityPermission: () => ipcRenderer.invoke(IPC_CHANNELS.refreshAccessibility),
+  openAccessibilitySettings: () => ipcRenderer.invoke(IPC_CHANNELS.openAccessibilitySettings),
   revealDataDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.revealDataDirectory),
   deleteAllData: () => ipcRenderer.invoke(IPC_CHANNELS.deleteAllData),
   exportDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.exportDiagnostics),
@@ -79,6 +82,18 @@ const bridge: OpenHistoryBridge = {
     };
     ipcRenderer.on(IPC_CHANNELS.agentAccessState, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.agentAccessState, handler);
+  },
+  onBootstrapState: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: BootstrapState): void => {
+      listener(state);
+    };
+    ipcRenderer.on(IPC_CHANNELS.bootstrapState, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.bootstrapState, handler);
+  },
+  onOpenSettings: (listener) => {
+    const handler = (): void => listener();
+    ipcRenderer.on(IPC_CHANNELS.openSettings, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.openSettings, handler);
   }
 };
 

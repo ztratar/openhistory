@@ -102,6 +102,22 @@ test("requests Accessibility through the host process bridge", async (context) =
   assert.equal(native.requestCount, 1);
 });
 
+test("refreshes Accessibility state and restarts capture when access changes", async (context) => {
+  const directory = await testDirectory(context);
+  const native = new FakeNativeCollector();
+  native.trusted = false;
+  const collector = new CollectorService(directory, DEFAULT_COLLECTION_SETTINGS, native);
+  context.after(() => collector.stop());
+  collector.start();
+
+  native.trusted = true;
+  assert.equal(collector.refreshAccessibilityPermission(), true);
+
+  assert.equal(collector.accessibilityTrusted, true);
+  assert.equal(native.stopCount, 1);
+  assert.equal(native.starts.length, 2);
+});
+
 async function testDirectory(context: TestContext): Promise<string> {
   const directory = await mkdtemp(resolve(tmpdir(), "openhistory-collector-service-"));
   context.after(() => rmSync(directory, { recursive: true, force: true }));

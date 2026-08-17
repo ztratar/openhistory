@@ -25,9 +25,15 @@ export function normalizeInferenceOnboardingSelection(
       typeof candidate.captureMessagingActivity !== "boolean") {
     throw new Error("Invalid messaging capture selection");
   }
+  if (candidate.appPresentationMode !== undefined &&
+      candidate.appPresentationMode !== "dock" &&
+      candidate.appPresentationMode !== "menuBar") {
+    throw new Error("Invalid app presentation selection");
+  }
   const captureSelections = {
     captureEmailActivity: candidate.captureEmailActivity === true,
-    captureMessagingActivity: candidate.captureMessagingActivity === true
+    captureMessagingActivity: candidate.captureMessagingActivity === true,
+    appPresentationMode: candidate.appPresentationMode ?? "dock"
   };
 
   if (!isCloudInferenceProvider(candidate.provider)) {

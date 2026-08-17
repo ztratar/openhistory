@@ -1,6 +1,7 @@
 import type {
   BootstrapState,
   CollectionSettings,
+  AppPresentationMode,
   ActivityEvent,
   HistoryLink,
   HourItem,
@@ -88,6 +89,10 @@ export function App(): React.JSX.Element {
       }),
       window.openHistory.onAgentAccessState((agentAccess) => {
         setState((current) => current ? { ...current, agentAccess } : current);
+      }),
+      window.openHistory.onBootstrapState(setState),
+      window.openHistory.onOpenSettings(() => {
+        selectPage("Settings");
       })
     ];
     return () => unsubscribe.forEach((remove) => remove());
@@ -118,7 +123,7 @@ export function App(): React.JSX.Element {
   }, [state?.collectionEnabled]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${state?.settings.appPresentationMode === "menuBar" ? " menu-bar-shell" : ""}`}>
       <header className="app-header">
         {liveActivityOpen ? (
           <div className="header-capture-control">
@@ -198,6 +203,7 @@ export function App(): React.JSX.Element {
               <PrivacyOnboarding onAccept={acceptPrivacyNotice} />
             ) : !inferenceOnboardingComplete ? (
               <InferenceOnboarding
+                accessibilityTrusted={state.accessibilityTrusted}
                 appleAvailability={state.inference.appleAvailability}
                 setState={setState}
               />
@@ -614,16 +620,21 @@ function BadgeIcon({ kind }: { kind: "experimental" | "recommended" }): React.JS
 }
 
 function InferenceOnboarding({
+  accessibilityTrusted,
   appleAvailability,
   setState
 }: {
+  accessibilityTrusted: boolean;
   appleAvailability: AppleInferenceAvailability;
   setState: SetAppState;
 }): React.JSX.Element {
   const [provider, setProvider] = useState<InferenceProvider>();
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [step, setStep] = useState<"model" | "capture">("model");
+  const [step, setStep] = useState<"model" | "capture" | "presentation">("model");
+  const [captureEmailActivity, setCaptureEmailActivity] = useState(true);
+  const [captureMessagingActivity, setCaptureMessagingActivity] = useState(true);
+  const [presentationMode, setPresentationMode] = useState<AppPresentationMode>("dock");
   const [saving, setSaving] = useState(false);
   const [checkingAppleAvailability, setCheckingAppleAvailability] = useState(false);
   const [error, setError] = useState<string>();
@@ -662,10 +673,14 @@ function InferenceOnboarding({
     }
   }
 
-  async function completeSetup(
-    captureEmailActivity: boolean,
-    captureMessagingActivity: boolean
-  ): Promise<void> {
+  function continueCapture(emailActivity: boolean, messagingActivity: boolean): void {
+    setCaptureEmailActivity(emailActivity);
+    setCaptureMessagingActivity(messagingActivity);
+    setError(undefined);
+    setStep("presentation");
+  }
+
+  async function completeSetup(): Promise<void> {
     if (!provider || !model || appleUnavailable || (cloudProvider && !apiKey.trim())) return;
     setSaving(true);
     setError(undefined);
@@ -675,6 +690,7 @@ function InferenceOnboarding({
         model,
         captureEmailActivity,
         captureMessagingActivity,
+        appPresentationMode: presentationMode,
         ...(cloudProvider ? { apiKey } : {})
       }));
     } catch {
@@ -687,13 +703,33 @@ function InferenceOnboarding({
   if (step === "capture" && provider) {
     return (
       <CapturePreferencesOnboarding
+        accessibilityTrusted={accessibilityTrusted}
         error={error}
         onBack={() => {
           setError(undefined);
           setStep("model");
         }}
-        onComplete={completeSetup}
+        initialEmailActivity={captureEmailActivity}
+        initialMessagingActivity={captureMessagingActivity}
+        onContinue={continueCapture}
         provider={provider}
+        saving={saving}
+        setState={setState}
+      />
+    );
+  }
+
+  if (step === "presentation") {
+    return (
+      <AppPresentationOnboarding
+        error={error}
+        mode={presentationMode}
+        onBack={() => {
+          setError(undefined);
+          setStep("capture");
+        }}
+        onChange={setPresentationMode}
+        onComplete={() => void completeSetup()}
         saving={saving}
       />
     );
@@ -858,22 +894,83 @@ function AppleAvailabilityDetails({
 }
 
 function CapturePreferencesOnboarding({
+  accessibilityTrusted,
   error,
+  initialEmailActivity,
+  initialMessagingActivity,
   onBack,
-  onComplete,
+  onContinue,
   provider,
-  saving
+  saving,
+  setState
 }: {
+  accessibilityTrusted: boolean;
   error?: string;
+  initialEmailActivity: boolean;
+  initialMessagingActivity: boolean;
   onBack: () => void;
-  onComplete: (captureEmailActivity: boolean, captureMessagingActivity: boolean) => Promise<void>;
+  onContinue: (captureEmailActivity: boolean, captureMessagingActivity: boolean) => void;
   provider: InferenceProvider;
   saving: boolean;
+  setState: SetAppState;
 }): React.JSX.Element {
-  const [captureEmailActivity, setCaptureEmailActivity] = useState(true);
-  const [captureMessagingActivity, setCaptureMessagingActivity] = useState(true);
+  const [captureEmailActivity, setCaptureEmailActivity] = useState(initialEmailActivity);
+  const [captureMessagingActivity, setCaptureMessagingActivity] = useState(initialMessagingActivity);
+  const [permissionRequested, setPermissionRequested] = useState(false);
+  const [checkingAccessibility, setCheckingAccessibility] = useState(false);
+  const [accessibilityError, setAccessibilityError] = useState<string>();
   const cloudProvider = isCloudInferenceProvider(provider) ? provider : undefined;
   const hasSelection = captureEmailActivity || captureMessagingActivity;
+
+  useEffect(() => {
+    if (!permissionRequested || accessibilityTrusted) return;
+    const refresh = (): void => {
+      void window.openHistory.refreshAccessibilityPermission()
+        .then(setState)
+        .catch(() => undefined);
+    };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [accessibilityTrusted, permissionRequested, setState]);
+
+  async function requestAccessibility(): Promise<void> {
+    setCheckingAccessibility(true);
+    setAccessibilityError(undefined);
+    try {
+      const nextState = await window.openHistory.requestAccessibilityPermission();
+      setState(nextState);
+      setPermissionRequested(!nextState.accessibilityTrusted);
+    } catch {
+      setPermissionRequested(true);
+      setAccessibilityError("OpenHistory could not request Accessibility access. Open System Settings and try again.");
+    } finally {
+      setCheckingAccessibility(false);
+    }
+  }
+
+  async function refreshAccessibility(): Promise<void> {
+    setCheckingAccessibility(true);
+    setAccessibilityError(undefined);
+    try {
+      const nextState = await window.openHistory.refreshAccessibilityPermission();
+      setState(nextState);
+      setPermissionRequested(!nextState.accessibilityTrusted);
+    } catch {
+      setAccessibilityError("OpenHistory could not check Accessibility access. Try again.");
+    } finally {
+      setCheckingAccessibility(false);
+    }
+  }
+
+  async function openAccessibilitySettings(): Promise<void> {
+    setAccessibilityError(undefined);
+    setPermissionRequested(true);
+    try {
+      await window.openHistory.openAccessibilitySettings();
+    } catch {
+      setAccessibilityError("System Settings could not be opened. Open Privacy & Security → Accessibility manually.");
+    }
+  }
 
   return (
     <section className="model-onboarding capture-onboarding" aria-labelledby="capture-onboarding-title">
@@ -882,12 +979,67 @@ function CapturePreferencesOnboarding({
         Back to model
       </button>
       <div className="model-onboarding-heading">
-        <span className="eyebrow">Optional capture</span>
-        <h2 id="capture-onboarding-title">Capture more of your work?</h2>
-        <p>Email and conversations often contain useful decisions and follow-ups. Both categories are selected by default; turn off either one to keep it excluded.</p>
+        <span className="eyebrow">Capture setup</span>
+        <h2 id="capture-onboarding-title">Choose what OpenHistory can capture.</h2>
+        <p>Accessibility enables rich activity capture. Email and messages are optional and can stay excluded.</p>
       </div>
 
       <div className="capture-onboarding-card card">
+        <div className={`capture-accessibility${accessibilityTrusted ? " enabled" : ""}`}>
+          <span className="capture-accessibility-icon" aria-hidden="true">
+            {accessibilityTrusted ? (
+              <svg viewBox="0 0 20 20"><path d="m5 10.5 3.1 3.1L15.5 6" /></svg>
+            ) : (
+              <svg viewBox="0 0 20 20"><circle cx="10" cy="5" r="2.2" /><path d="M4.5 8.5h11M10 8.5v7M6.5 9.2l1.1 6.3M13.5 9.2l-1.1 6.3" /></svg>
+            )}
+          </span>
+          <span className="capture-accessibility-copy">
+            <span className="capture-accessibility-title">
+              <strong>Accessibility access</strong>
+              <small>{accessibilityTrusted ? "Enabled" : "Required"}</small>
+            </span>
+            <span>{accessibilityTrusted
+              ? "Rich activity capture is ready."
+              : permissionRequested
+                ? "Turn on OpenHistory in System Settings, then return here."
+                : "Needed to understand controls, text edits, URLs, and document context. OpenHistory never records screen video."}</span>
+          </span>
+          {accessibilityTrusted ? null : permissionRequested ? (
+            <div className="capture-accessibility-actions">
+              <button
+                className="primary-button"
+                disabled={checkingAccessibility}
+                onClick={() => void openAccessibilitySettings()}
+                type="button"
+              >
+                Open System Settings
+              </button>
+              <button
+                className="secondary-button"
+                disabled={checkingAccessibility}
+                onClick={() => void refreshAccessibility()}
+                type="button"
+              >
+                {checkingAccessibility ? "Checking…" : "Check again"}
+              </button>
+            </div>
+          ) : (
+            <button
+              className="primary-button capture-accessibility-grant"
+              disabled={checkingAccessibility}
+              onClick={() => void requestAccessibility()}
+              type="button"
+            >
+              {checkingAccessibility ? "Requesting…" : "Grant access"}
+            </button>
+          )}
+        </div>
+
+        {accessibilityError ? <ErrorMessage>{accessibilityError}</ErrorMessage> : null}
+        <div className="capture-onboarding-section-heading">
+          <strong>Optional activity</strong>
+          <span>Selected by default</span>
+        </div>
         <div className="capture-onboarding-options">
           <label className={`capture-onboarding-option${captureEmailActivity ? " selected" : ""}`}>
             <span>
@@ -926,22 +1078,90 @@ function CapturePreferencesOnboarding({
           <button
             className="secondary-button"
             disabled={saving}
-            onClick={() => void onComplete(false, false)}
+            onClick={() => onContinue(false, false)}
             type="button"
           >
-            {saving ? "Finishing setup…" : "Keep excluded"}
+            Keep excluded
           </button>
           <button
             className="primary-button"
             disabled={saving || !hasSelection}
-            onClick={() => void onComplete(captureEmailActivity, captureMessagingActivity)}
+            onClick={() => onContinue(captureEmailActivity, captureMessagingActivity)}
             type="button"
           >
-            {saving ? "Finishing setup…" : "Include selected"}
+            Continue
           </button>
         </div>
-        <p className="onboarding-key-note capture-onboarding-note">You can change either category later in Settings.</p>
+        <p className="onboarding-key-note capture-onboarding-note">{accessibilityTrusted
+          ? "You can change either category later in Settings."
+          : "You can finish with limited capture and grant Accessibility later in Settings."}</p>
       </div>
+    </section>
+  );
+}
+
+function AppPresentationOnboarding({
+  error,
+  mode,
+  onBack,
+  onChange,
+  onComplete,
+  saving
+}: {
+  error?: string;
+  mode: AppPresentationMode;
+  onBack: () => void;
+  onChange: (mode: AppPresentationMode) => void;
+  onComplete: () => void;
+  saving: boolean;
+}): React.JSX.Element {
+  return (
+    <section className="model-onboarding presentation-onboarding" aria-labelledby="presentation-onboarding-title">
+      <button className="onboarding-back-button" disabled={saving} onClick={onBack} type="button">
+        <svg aria-hidden="true" viewBox="0 0 16 16"><path d="m9.75 3.25-4.5 4.75 4.5 4.75" /></svg>
+        Back to capture
+      </button>
+      <div className="model-onboarding-heading">
+        <span className="eyebrow">App location</span>
+        <h2 id="presentation-onboarding-title">Where should OpenHistory live?</h2>
+        <p>Choose a regular app window or keep OpenHistory tucked into the menu bar. You can change this later in Settings.</p>
+      </div>
+      <div className="presentation-choice-list" role="radiogroup" aria-label="App location">
+        <button
+          aria-checked={mode === "dock"}
+          className={`presentation-choice-card card${mode === "dock" ? " selected" : ""}`}
+          onClick={() => onChange("dock")}
+          role="radio"
+          type="button"
+        >
+          <span className="presentation-choice-illustration dock" aria-hidden="true">
+            <svg viewBox="0 0 112 72"><rect x="20" y="9" width="72" height="48" rx="6" /><circle cx="28" cy="17" r="2" /><circle cx="35" cy="17" r="2" /><path d="M13 64h86" /></svg>
+          </span>
+          <span><strong>Dock app</strong><small>A familiar resizable window that appears in the Dock and app switcher.</small></span>
+          <span className="presentation-choice-check" aria-hidden="true" />
+        </button>
+        <button
+          aria-checked={mode === "menuBar"}
+          className={`presentation-choice-card card${mode === "menuBar" ? " selected" : ""}`}
+          onClick={() => onChange("menuBar")}
+          role="radio"
+          type="button"
+        >
+          <span className="presentation-choice-illustration menu-bar" aria-hidden="true">
+            <svg viewBox="0 0 112 72"><path d="M10 11h92" /><circle cx="85" cy="6" r="3" /><path d="m85 11-5 6h10l-5-6Z" /><rect x="48" y="17" width="54" height="46" rx="7" /><circle cx="57" cy="27" r="3" /><path d="M65 27h25M56 37h38M56 45h38M56 53h26" /></svg>
+          </span>
+          <span><strong>Menu bar</strong><small>Click the status icon to open OpenHistory directly below it; click again or outside to hide.</small></span>
+          <span className="presentation-choice-check" aria-hidden="true" />
+        </button>
+      </div>
+      <div className="presentation-state-note">
+        <span className="presentation-state-icons" aria-hidden="true"><i className="capturing" /><i className="paused" /><i className="attention">!</i></span>
+        <span><strong>At-a-glance capture state</strong><small>In menu-bar mode, the icon changes for capturing, paused, and needs attention.</small></span>
+      </div>
+      {error ? <ErrorMessage>{error}</ErrorMessage> : null}
+      <button className="primary-button presentation-finish" disabled={saving} onClick={onComplete} type="button">
+        {saving ? "Finishing setup…" : mode === "menuBar" ? "Use the menu bar" : "Use the Dock"}
+      </button>
     </section>
   );
 }
@@ -1842,6 +2062,36 @@ function SettingsPage({
 
   return (
     <section className="page-stack">
+      <div className="card app-location-settings">
+        <div className="app-location-heading">
+          <strong>App location</strong>
+          <span>{state.settings.appPresentationMode === "menuBar"
+            ? "OpenHistory opens below its menu-bar icon."
+            : "OpenHistory behaves like a regular Dock app."}</span>
+        </div>
+        <div className="app-location-options" aria-label="App location" role="radiogroup">
+          <button
+            aria-checked={state.settings.appPresentationMode === "dock"}
+            className={state.settings.appPresentationMode === "dock" ? "active" : ""}
+            onClick={() => void updateSettings({ ...state.settings, appPresentationMode: "dock" })}
+            role="radio"
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="13" rx="2" /><path d="M2 20h20" /></svg>
+            <span><strong>Dock app</strong><small>Window and app switcher</small></span>
+          </button>
+          <button
+            aria-checked={state.settings.appPresentationMode === "menuBar"}
+            className={state.settings.appPresentationMode === "menuBar" ? "active" : ""}
+            onClick={() => void updateSettings({ ...state.settings, appPresentationMode: "menuBar" })}
+            role="radio"
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 4h20" /><circle cx="17" cy="2" r="1.5" /><rect x="9" y="7" width="13" height="14" rx="2" /></svg>
+            <span><strong>Menu bar</strong><small>Click to show or hide</small></span>
+          </button>
+        </div>
+      </div>
       <div className="card inference-settings">
         <label className="switch-row inference-toggle">
           <span>

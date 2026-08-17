@@ -100,13 +100,26 @@ export class CollectorService extends EventEmitter {
 
   requestAccessibilityPermission(): void {
     try {
-      this.native().requestTrust();
+      this.accessibilityTrusted = this.native().requestTrust();
       this.startAccessibilityMonitor();
     } catch (error) {
       console.error("Unable to request Accessibility permission", {
         name: error instanceof Error ? error.name : "UnknownError"
       });
     }
+  }
+
+  refreshAccessibilityPermission(): boolean {
+    let trusted: boolean;
+    try {
+      trusted = this.native().isTrusted();
+    } catch {
+      return this.accessibilityTrusted;
+    }
+    if (trusted === this.accessibilityTrusted) return trusted;
+    this.accessibilityTrusted = trusted;
+    if (this.enabled) this.restart();
+    return trusted;
   }
 
   setEnabled(enabled: boolean): void {

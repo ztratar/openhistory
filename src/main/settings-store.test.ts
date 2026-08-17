@@ -21,6 +21,7 @@ test("persists normalized collection settings", async (context) => {
     inferenceOnboardingVersion: 1,
     cloudInferenceConsents: ["openai", "openai", "anthropic"],
     appearanceMode: "dark",
+    appPresentationMode: "menuBar",
     captureWindowTitles: false,
     captureFocusedElements: true,
     captureTextInput: false,
@@ -39,6 +40,7 @@ test("persists normalized collection settings", async (context) => {
   assert.equal(store.load().captureEmailActivity, true);
   assert.equal(store.load().captureMessagingActivity, true);
   assert.equal(store.load().appearanceMode, "dark");
+  assert.equal(store.load().appPresentationMode, "menuBar");
 });
 
 test("migrates the original two-field settings file with semantic defaults", async (context) => {
@@ -54,6 +56,7 @@ test("migrates the original two-field settings file with semantic defaults", asy
   assert.equal(settings.inferenceOnboardingVersion, 0);
   assert.deepEqual(settings.cloudInferenceConsents, []);
   assert.equal(settings.appearanceMode, "system");
+  assert.equal(settings.appPresentationMode, "dock");
   assert.equal(settings.captureTextInput, true);
   assert.equal(settings.captureDocumentContext, true);
   assert.equal(settings.captureUISnapshots, true);

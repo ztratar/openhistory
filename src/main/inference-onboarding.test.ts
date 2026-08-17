@@ -14,7 +14,8 @@ test("accepts the supported Apple model without a credential", () => {
     provider: "apple",
     model: "system-default",
     captureEmailActivity: false,
-    captureMessagingActivity: false
+    captureMessagingActivity: false,
+    appPresentationMode: "dock"
   });
 });
 
@@ -28,7 +29,8 @@ test("requires and trims a cloud credential", () => {
     model: "gpt-5.6-luna",
     apiKey: "sk-synthetic",
     captureEmailActivity: false,
-    captureMessagingActivity: false
+    captureMessagingActivity: false,
+    appPresentationMode: "dock"
   });
   assert.throws(() => normalizeInferenceOnboardingSelection({
     provider: "anthropic",
@@ -48,13 +50,27 @@ test("normalizes independent onboarding capture opt-ins", () => {
     model: "gpt-5.6-luna",
     apiKey: "sk-synthetic",
     captureEmailActivity: true,
-    captureMessagingActivity: false
+    captureMessagingActivity: false,
+    appPresentationMode: "dock"
   });
   assert.throws(() => normalizeInferenceOnboardingSelection({
     provider: "apple",
     model: "system-default",
     captureMessagingActivity: "yes"
   }), /Invalid messaging capture selection/);
+  assert.throws(() => normalizeInferenceOnboardingSelection({
+    provider: "apple",
+    model: "system-default",
+    appPresentationMode: "window"
+  }), /Invalid app presentation selection/);
+});
+
+test("accepts menu bar presentation during onboarding", () => {
+  assert.equal(normalizeInferenceOnboardingSelection({
+    provider: "apple",
+    model: "system-default",
+    appPresentationMode: "menuBar"
+  }).appPresentationMode, "menuBar");
 });
 
 test("rejects unlisted providers and models", () => {
