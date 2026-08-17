@@ -3,7 +3,7 @@ set -eu
 
 requested_arch="${1:-host}"
 sign_mode="${2:-none}"
-app_version="${OPENHISTORY_APP_VERSION:-0.1.0}"
+app_version="${OPENHISTORY_APP_VERSION:-0.4.0}"
 
 if [ "${requested_arch}" = "host" ]; then
   requested_arch="$(uname -m)"
