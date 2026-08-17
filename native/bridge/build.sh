@@ -34,6 +34,7 @@ export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-$PWD/.swift-cache/cla
 export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-$PWD/.swift-cache/swift}"
 
 build_root=".todesktop/native/.openhistory-native-build"
+swift_scratch_root=".todesktop/native/.swiftpm/${configuration}"
 output_root=".todesktop/native/${requested_arch}"
 module_output="${output_root}/openhistory-native.node"
 library_output="${output_root}/libOpenHistoryCollector.dylib"
@@ -47,15 +48,18 @@ build_architecture() {
   swift_arch="$1"
   output_name="$2"
   architecture_root="${build_root}/${output_name}"
-  mkdir -p "${architecture_root}"
+  swift_scratch_path="${swift_scratch_root}/${output_name}"
+  mkdir -p "${architecture_root}" "${swift_scratch_path}"
   swift build \
     --disable-sandbox \
     --package-path native/collector \
+    --scratch-path "${swift_scratch_path}" \
     --configuration "${configuration}" \
     --arch "${swift_arch}" >&2
   bin_path="$(swift build \
     --disable-sandbox \
     --package-path native/collector \
+    --scratch-path "${swift_scratch_path}" \
     --configuration "${configuration}" \
     --arch "${swift_arch}" \
     --show-bin-path)"
