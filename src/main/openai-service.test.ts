@@ -255,7 +255,7 @@ test("samples busy semantic streams across the whole episode", () => {
   };
 
   const sampled = eventsForModel(episode);
-  assert.equal(sampled.length, 60);
+  assert.equal(sampled.length, 12);
   assert.equal(sampled[0]?.id, "focus-0");
   assert.equal(sampled.at(-1)?.id, "focus-99");
   assert(sampled.some((event) => Number(event.id.split("-")[1]) >= 45 && Number(event.id.split("-")[1]) <= 55));
@@ -276,7 +276,7 @@ test("normalizes legacy large replacements as document changes for the model", (
   assert.equal(semanticKindForModel(event), "document_changed");
 });
 
-test("compacts repeated passive context but preserves repeated actions", () => {
+test("omits focus context when stronger direct actions are available", () => {
   const focus = event("focus-1", "focused_element_changed");
   focus.element = { role: "AXButton", title: "Save" };
   const duplicateFocus = { ...focus, id: "focus-2" };
@@ -285,7 +285,7 @@ test("compacts repeated passive context but preserves repeated actions", () => {
   const duplicateClick = { ...click, id: "click-2" };
   const episode = makeEpisode([focus, duplicateFocus, click, duplicateClick]);
 
-  assert.deepEqual(eventsForModel(episode).map(({ id }) => id), ["focus-1", "click-1", "click-2"]);
+  assert.deepEqual(eventsForModel(episode).map(({ id }) => id), ["click-1", "click-2"]);
 });
 
 test("adds deterministic evidence counts and an ordered semantic sequence", () => {
@@ -306,11 +306,11 @@ test("adds deterministic evidence counts and an ordered semantic sequence", () =
   };
   assert.equal(modelInput.evidenceSummary.directActionCount, 1);
   assert.equal(modelInput.evidenceSummary.navigationCount, 1);
-  assert.equal(modelInput.evidenceSummary.contextCount, 1);
+  assert.equal(modelInput.evidenceSummary.contextCount, 0);
   assert.equal(modelInput.evidenceSummary.contentChangeCount, 1);
   assert.equal(modelInput.evidenceSummary.summaryMode, "standard");
   assert.deepEqual(modelInput.evidenceSummary.sequence.map(({ kind }) => kind), [
-    "focused_element_changed", "text_input", "url_changed"
+    "text_input", "url_changed"
   ]);
   assert(!JSON.stringify(modelInput).includes("com.example.Editor"));
 });

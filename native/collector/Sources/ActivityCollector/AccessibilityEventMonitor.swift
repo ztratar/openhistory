@@ -21,13 +21,18 @@ private func accessibilityObserverCallback(
 
 final class AccessibilityEventMonitor: @unchecked Sendable {
     private let handler: (AccessibilityEvent) -> Void
+    private let focusedElementProvider: (pid_t) -> AXUIElement?
     private var observer: AXObserver?
     private var runLoopSource: CFRunLoopSource?
     private var applicationElement: AXUIElement?
     private var focusedElement: AXUIElement?
     private(set) var processIdentifier: pid_t?
 
-    init(handler: @escaping (AccessibilityEvent) -> Void) {
+    init(
+        focusedElementProvider: @escaping (pid_t) -> AXUIElement?,
+        handler: @escaping (AccessibilityEvent) -> Void
+    ) {
+        self.focusedElementProvider = focusedElementProvider
         self.handler = handler
     }
 
@@ -122,20 +127,8 @@ final class AccessibilityEventMonitor: @unchecked Sendable {
     }
 
     private func rebindFocusedElement() {
-        guard let observer, let applicationElement else { return }
-        var value: CFTypeRef?
-        let nextFocusedElement: AXUIElement?
-        if AXUIElementCopyAttributeValue(
-            applicationElement,
-            kAXFocusedUIElementAttribute as CFString,
-            &value
-        ) == .success,
-           let value,
-           CFGetTypeID(value) == AXUIElementGetTypeID() {
-            nextFocusedElement = unsafeDowncast(value, to: AXUIElement.self)
-        } else {
-            nextFocusedElement = nil
-        }
+        guard let observer, applicationElement != nil, let processIdentifier else { return }
+        let nextFocusedElement = focusedElementProvider(processIdentifier)
 
         if let focusedElement, let nextFocusedElement, CFEqual(focusedElement, nextFocusedElement) {
             return

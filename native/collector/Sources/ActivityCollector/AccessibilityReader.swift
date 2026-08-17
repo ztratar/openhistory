@@ -13,8 +13,16 @@ struct FocusedTextObservation {
     let characterCount: Int?
 }
 
-final class AccessibilityReader {
+final class AccessibilityReader: @unchecked Sendable {
     private var enhancedProcessIdentifiers = Set<pid_t>()
+    private var discoveredFocusedElements: [pid_t: AXUIElement] = [:]
+    private var focusedDiscoveryInFlight = Set<pid_t>()
+    private var lastFocusedDiscoveryAt: [pid_t: Date] = [:]
+    private let focusedDiscoveryLock = NSLock()
+    private let focusedDiscoveryQueue = DispatchQueue(
+        label: "io.github.ztratar.openhistory.accessibility-focus-discovery",
+        qos: .utility
+    )
     private let redactEmailAddresses: Bool
 
     init(redactEmailAddresses: Bool = true) {
@@ -68,10 +76,60 @@ final class AccessibilityReader {
 
     func focusedElement(processIdentifier: pid_t) -> AXUIElement? {
         prepareApplication(processIdentifier: processIdentifier)
-        return elementAttribute(
-            AXUIElementCreateApplication(processIdentifier),
+        let application = AXUIElementCreateApplication(processIdentifier)
+        if let focused = elementAttribute(
+            application,
             attribute: kAXFocusedUIElementAttribute as CFString
-        )
+        ) {
+            return focused
+        }
+        if let focused = elementAttribute(
+            AXUIElementCreateSystemWide(),
+            attribute: kAXFocusedUIElementAttribute as CFString
+        ), belongsToProcess(focused, processIdentifier: processIdentifier) {
+            return focused
+        }
+        focusedDiscoveryLock.lock()
+        let cached = discoveredFocusedElements[processIdentifier]
+        focusedDiscoveryLock.unlock()
+        if let cached,
+           booleanAttribute(cached, attribute: kAXFocusedAttribute as CFString) == true,
+           belongsToProcess(cached, processIdentifier: processIdentifier) {
+            return cached
+        }
+        focusedDiscoveryLock.lock()
+        discoveredFocusedElements.removeValue(forKey: processIdentifier)
+        focusedDiscoveryLock.unlock()
+        return nil
+    }
+
+    func discoverFocusedElementIfNeeded(processIdentifier: pid_t) {
+        focusedDiscoveryLock.lock()
+        let recentlyAttempted = Date().timeIntervalSince(
+            lastFocusedDiscoveryAt[processIdentifier] ?? .distantPast
+        ) < 3
+        guard !focusedDiscoveryInFlight.contains(processIdentifier), !recentlyAttempted else {
+            focusedDiscoveryLock.unlock()
+            return
+        }
+        focusedDiscoveryInFlight.insert(processIdentifier)
+        lastFocusedDiscoveryAt[processIdentifier] = Date()
+        focusedDiscoveryLock.unlock()
+
+        focusedDiscoveryQueue.async { [weak self] in
+            guard let self else { return }
+            let application = AXUIElementCreateApplication(processIdentifier)
+            let discovered = self.focusedEditableDescendant(
+                application: application,
+                processIdentifier: processIdentifier
+            )
+            self.focusedDiscoveryLock.lock()
+            if let discovered {
+                self.discoveredFocusedElements[processIdentifier] = discovered
+            }
+            self.focusedDiscoveryInFlight.remove(processIdentifier)
+            self.focusedDiscoveryLock.unlock()
+        }
     }
 
     func focusedTextObservation(processIdentifier: pid_t) -> FocusedTextObservation? {
@@ -551,6 +609,63 @@ final class AccessibilityReader {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else { return nil }
         return value
+    }
+
+    private func booleanAttribute(_ element: AXUIElement, attribute: CFString) -> Bool? {
+        (copyAttribute(element, attribute: attribute) as? NSNumber)?.boolValue
+    }
+
+    private func belongsToProcess(_ element: AXUIElement, processIdentifier: pid_t) -> Bool {
+        var elementProcessIdentifier = pid_t()
+        return AXUIElementGetPid(element, &elementProcessIdentifier) == .success &&
+            elementProcessIdentifier == processIdentifier
+    }
+
+    /// Chromium editors can remain reachable in the AX tree even when both focused-element
+    /// attributes return no value. Search only the requested application's descendants and
+    /// accept only an editable element whose AXFocused flag and PID both match.
+    private func focusedEditableDescendant(
+        application: AXUIElement,
+        processIdentifier: pid_t
+    ) -> AXUIElement? {
+        var queue: [(element: AXUIElement, depth: Int)] = []
+        queue.append(contentsOf: elementsAttribute(
+            application,
+            attribute: kAXWindowsAttribute as CFString
+        ).map { ($0, 0) })
+        queue.append(contentsOf: children(of: application).map { ($0, 0) })
+        var seen = Set<CFHashCode>()
+        var cursor = 0
+        let maximumNodes = 240
+        let maximumDepth = 12
+
+        while cursor < queue.count, cursor < maximumNodes {
+            let candidate = queue[cursor]
+            cursor += 1
+            guard seen.insert(CFHash(candidate.element)).inserted else { continue }
+            if booleanAttribute(candidate.element, attribute: kAXFocusedAttribute as CFString) == true,
+               isEditableElement(candidate.element),
+               belongsToProcess(candidate.element, processIdentifier: processIdentifier) {
+                return candidate.element
+            }
+            guard candidate.depth < maximumDepth else { continue }
+            queue.append(contentsOf: children(of: candidate.element).map {
+                ($0, candidate.depth + 1)
+            })
+        }
+        return nil
+    }
+
+    private func isEditableElement(_ element: AXUIElement) -> Bool {
+        let role = stringAttribute(element, attribute: kAXRoleAttribute as CFString)
+        let subrole = stringAttribute(element, attribute: kAXSubroleAttribute as CFString)
+        let editableRoles = Set(["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"])
+        if role.map(editableRoles.contains) == true || subrole == "AXSearchField" {
+            return true
+        }
+        let editableContainerRoles = Set(["AXGroup", "AXWebArea", "AXUnknown"])
+        return role.map(editableContainerRoles.contains) == true &&
+            isAttributeSettable(element, attribute: kAXValueAttribute as CFString)
     }
 
     private func isAttributeSettable(_ element: AXUIElement, attribute: CFString) -> Bool {

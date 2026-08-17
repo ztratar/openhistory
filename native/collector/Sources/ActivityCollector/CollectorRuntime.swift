@@ -164,9 +164,14 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         registerWorkspaceObservers()
 
         if trusted && semanticCaptureEnabled {
-            accessibilityEventMonitor = AccessibilityEventMonitor { [weak self] event in
-                self?.handleAccessibilityEvent(event)
-            }
+            accessibilityEventMonitor = AccessibilityEventMonitor(
+                focusedElementProvider: { [weak self] processIdentifier in
+                    self?.accessibility.focusedElement(processIdentifier: processIdentifier)
+                },
+                handler: { [weak self] event in
+                    self?.handleAccessibilityEvent(event)
+                }
+            )
             bindAccessibilityEventMonitor()
             semanticSampler = Timer.scheduledTimer(withTimeInterval: 0.75, repeats: true) { [weak self] _ in
                 self?.sampleSemanticActivity()
@@ -282,7 +287,6 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         switch event {
         case .focusChanged:
             flushPendingTextEdit()
-            lastFocusedKey = nil
             sampleSemanticActivity()
         case let .valueChanged(processIdentifier, element),
              let .selectedTextChanged(processIdentifier, element):
@@ -419,6 +423,9 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         let focusedElement = (configuration.focusedElements || configuration.textInput)
             ? accessibility.focusedElement(processIdentifier: processIdentifier)
             : nil
+        if focusedElement == nil, configuration.focusedElements || configuration.textInput {
+            accessibility.discoverFocusedElementIfNeeded(processIdentifier: processIdentifier)
+        }
         let sensitiveFocusedText = focusedElement.map {
             accessibility.isSensitiveTextInput(element: $0)
         } ?? false
