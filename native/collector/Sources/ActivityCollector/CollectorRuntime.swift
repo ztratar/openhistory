@@ -92,7 +92,9 @@ final class ApplicationActivityCollector: @unchecked Sendable {
     private let accessibility: AccessibilityReader
     private let configuration: CaptureConfiguration
     private var observers: [NSObjectProtocol] = []
+    private var accessibilityEventMonitor: AccessibilityEventMonitor?
     private var semanticSampler: Timer?
+    private var pendingTextFlushTimer: Timer?
     private var heartbeatTimer: Timer?
     private var pointerEventTap: PointerEventTap?
     private var lastObservableApplication: NSRunningApplication?
@@ -162,6 +164,15 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         registerWorkspaceObservers()
 
         if trusted && semanticCaptureEnabled {
+            accessibilityEventMonitor = AccessibilityEventMonitor(
+                focusedElementProvider: { [weak self] processIdentifier in
+                    self?.accessibility.focusedElement(processIdentifier: processIdentifier)
+                },
+                handler: { [weak self] event in
+                    self?.handleAccessibilityEvent(event)
+                }
+            )
+            bindAccessibilityEventMonitor()
             semanticSampler = Timer.scheduledTimer(withTimeInterval: 0.75, repeats: true) { [weak self] _ in
                 self?.sampleSemanticActivity()
             }
@@ -171,6 +182,8 @@ final class ApplicationActivityCollector: @unchecked Sendable {
 
     func stop() {
         flushPendingTextEdit()
+        accessibilityEventMonitor?.stop()
+        accessibilityEventMonitor = nil
         semanticSampler?.invalidate()
         semanticSampler = nil
         heartbeatTimer?.invalidate()
@@ -198,6 +211,7 @@ final class ApplicationActivityCollector: @unchecked Sendable {
             self?.lastFocusedKey = nil
             self?.leaveProtectedBrowserContext()
             self?.record(application, kind: .applicationActivated)
+            self?.bindAccessibilityEventMonitor()
             self?.sampleSemanticActivity()
         })
 
@@ -210,6 +224,7 @@ final class ApplicationActivityCollector: @unchecked Sendable {
             guard self?.lastObservableApplication?.processIdentifier == application.processIdentifier else { return }
             self?.record(application, kind: .applicationTerminated)
             self?.lastObservableApplication = nil
+            self?.bindAccessibilityEventMonitor()
         })
 
         observers.append(center.addObserver(
@@ -229,6 +244,7 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         ) { [weak self] _ in
             self?.screenAwake = true
             self?.emit(ActivityEvent(kind: .screenWoke))
+            self?.bindAccessibilityEventMonitor()
             self?.sampleSemanticActivity()
         })
 
@@ -249,8 +265,87 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         ) { [weak self] _ in
             self?.sessionActive = true
             self?.emit(ActivityEvent(kind: .sessionUnlocked))
+            self?.bindAccessibilityEventMonitor()
             self?.sampleSemanticActivity()
         })
+    }
+
+    private func bindAccessibilityEventMonitor() {
+        guard let accessibilityEventMonitor,
+              sessionActive,
+              screenAwake,
+              AXIsProcessTrusted(),
+              let application = applicationForSemanticSampling(),
+              shouldObserve(application) else {
+            accessibilityEventMonitor?.stop()
+            return
+        }
+        accessibilityEventMonitor.bind(to: application.processIdentifier)
+    }
+
+    private func handleAccessibilityEvent(_ event: AccessibilityEvent) {
+        switch event {
+        case .focusChanged:
+            flushPendingTextEdit()
+            sampleSemanticActivity()
+        case let .valueChanged(processIdentifier, element),
+             let .selectedTextChanged(processIdentifier, element):
+            sampleTextInputFromAccessibilityNotification(
+                element: element,
+                processIdentifier: processIdentifier
+            )
+        case .focusedElementDestroyed:
+            flushPendingTextEdit()
+            lastFocusedKey = nil
+            DispatchQueue.main.async { [weak self] in
+                self?.sampleSemanticActivity()
+            }
+        }
+    }
+
+    private func sampleTextInputFromAccessibilityNotification(
+        element: AXUIElement,
+        processIdentifier: pid_t
+    ) {
+        guard configuration.textInput,
+              sessionActive,
+              screenAwake,
+              AXIsProcessTrusted(),
+              let application = applicationForSemanticSampling(),
+              application.processIdentifier == processIdentifier,
+              shouldObserve(application),
+              let currentFocusedElement = accessibility.focusedElement(
+                  processIdentifier: processIdentifier
+              ),
+              CFEqual(currentFocusedElement, element) else { return }
+
+        let focusedWindow = accessibility.focusedWindow(processIdentifier: processIdentifier)
+        let isBrowserApplication = application.bundleIdentifier.map(browserApplications.contains) == true
+        let privacyWindowTitle = configuration.windowTitles || isBrowserApplication
+            ? focusedWindow.flatMap { accessibility.focusedWindowTitle(window: $0) }
+            : nil
+        let context = browserContext(
+            for: application,
+            rawURL: isBrowserApplication
+                ? focusedWindow.flatMap { accessibility.browserAddress(root: $0) }
+                : nil,
+            windowTitle: privacyWindowTitle
+        )
+        guard !context.isProtected else {
+            discardPendingTextEdit()
+            return
+        }
+        if accessibility.isSensitiveTextInput(element: element) {
+            discardPendingTextEdit()
+            clearTextState(processIdentifier: processIdentifier)
+            return
+        }
+        sampleTextInput(
+            focusedElement: element,
+            processIdentifier: processIdentifier,
+            application: applicationDescriptor(application),
+            windowTitle: configuration.windowTitles ? privacyWindowTitle : nil
+        )
     }
 
     private func record(_ application: NSRunningApplication, kind: ActivityEvent.Kind) {
@@ -287,6 +382,7 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         }
         let descriptor = applicationDescriptor(application)
         let processIdentifier = application.processIdentifier
+        accessibilityEventMonitor?.bind(to: processIdentifier)
         let focusedWindow = accessibility.focusedWindow(processIdentifier: processIdentifier)
         let rawBrowserURL = focusedWindow.flatMap { accessibility.browserAddress(root: $0) }
         let privacyWindowTitle = focusedWindow.flatMap { accessibility.focusedWindowTitle(window: $0) }
@@ -327,6 +423,9 @@ final class ApplicationActivityCollector: @unchecked Sendable {
         let focusedElement = (configuration.focusedElements || configuration.textInput)
             ? accessibility.focusedElement(processIdentifier: processIdentifier)
             : nil
+        if focusedElement == nil, configuration.focusedElements || configuration.textInput {
+            accessibility.discoverFocusedElementIfNeeded(processIdentifier: processIdentifier)
+        }
         let sensitiveFocusedText = focusedElement.map {
             accessibility.isSensitiveTextInput(element: $0)
         } ?? false
@@ -554,6 +653,17 @@ final class ApplicationActivityCollector: @unchecked Sendable {
             return
         }
         if previous.value != observation.value {
+            if let edit = pendingTextEdit,
+               edit.key == observation.key,
+               SemanticSanitizer.isAbruptTextReset(
+                   baselineValue: edit.before.value,
+                   currentValue: edit.current.value,
+                   nextValue: observation.value
+               ) {
+                flushPendingTextEdit()
+                lastObservedText[observation.key] = observation
+                return
+            }
             if pendingTextEdit?.key == observation.key {
                 pendingTextEdit?.current = observation
                 pendingTextEdit?.lastChangedAt = Date()
@@ -570,6 +680,7 @@ final class ApplicationActivityCollector: @unchecked Sendable {
                 )
             }
             lastObservedText[observation.key] = observation
+            schedulePendingTextEditFlush()
         } else if let pendingTextEdit,
                   pendingTextEdit.key == observation.key,
                   Date().timeIntervalSince(pendingTextEdit.lastChangedAt) >= 1.2 {
@@ -578,6 +689,8 @@ final class ApplicationActivityCollector: @unchecked Sendable {
     }
 
     private func flushPendingTextEdit() {
+        pendingTextFlushTimer?.invalidate()
+        pendingTextFlushTimer = nil
         guard let edit = pendingTextEdit else { return }
         pendingTextEdit = nil
         let preciseCaretChange = caretTextChange(edit)
@@ -604,7 +717,16 @@ final class ApplicationActivityCollector: @unchecked Sendable {
     }
 
     private func discardPendingTextEdit() {
+        pendingTextFlushTimer?.invalidate()
+        pendingTextFlushTimer = nil
         pendingTextEdit = nil
+    }
+
+    private func schedulePendingTextEditFlush() {
+        pendingTextFlushTimer?.invalidate()
+        pendingTextFlushTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
+            self?.flushPendingTextEdit()
+        }
     }
 
     private func caretTextChange(_ edit: PendingTextEdit) -> TextChange? {

@@ -175,6 +175,39 @@ import Testing
     ))
 }
 
+@Test func abruptComposerResetPreservesTheCompletedTypingBurst() {
+    #expect(SemanticSanitizer.isAbruptTextReset(
+        baselineValue: "",
+        currentValue: "two complete words",
+        nextValue: ""
+    ))
+    #expect(SemanticSanitizer.isAbruptTextReset(
+        baselineValue: "Existing draft",
+        currentValue: "Existing draft with a completed sentence",
+        nextValue: ""
+    ))
+    #expect(!SemanticSanitizer.isAbruptTextReset(
+        baselineValue: "",
+        currentValue: "a",
+        nextValue: ""
+    ))
+    #expect(!SemanticSanitizer.isAbruptTextReset(
+        baselineValue: "",
+        currentValue: "two complete words",
+        nextValue: "two complete word"
+    ))
+}
+
+@Test func rapidTypingSnapshotsProduceOneCompleteSemanticChange() {
+    let snapshots = ["f", "fa", "fast", "fast typing", "fast typing works"]
+    let finalChange = SemanticSanitizer.textChange(from: "", to: snapshots.last ?? "")
+    #expect(finalChange.insertedText == "fast typing works")
+    #expect(finalChange.deletedCharacterCount == 0)
+    let duplicate = SemanticSanitizer.textChange(from: snapshots.last ?? "", to: snapshots.last ?? "")
+    #expect(duplicate.insertedText.isEmpty)
+    #expect(duplicate.deletedCharacterCount == 0)
+}
+
 @Test func sensitiveFieldsAndCredentialShapedTextAreRedacted() {
     #expect(SemanticSanitizer.isSensitiveFieldMetadata(["API key", nil]))
     #expect(SemanticSanitizer.isSensitiveFieldMetadata(["Enter your password", "account"]))

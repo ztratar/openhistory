@@ -72,6 +72,7 @@ build_architecture() {
     -D OPENHISTORY_EMBEDDED_COLLECTOR \
     -module-name OpenHistoryCollectorBridge \
     -I "${bin_path}/Modules" \
+    native/collector/Sources/ActivityCollector/AccessibilityEventMonitor.swift \
     native/collector/Sources/ActivityCollector/AccessibilityReader.swift \
     native/collector/Sources/ActivityCollector/PointerEventTap.swift \
     native/collector/Sources/ActivityCollector/CollectorRuntime.swift \

@@ -145,12 +145,23 @@ function evidenceStrength(
 
 export function eventsForModel(episode: ActivityEpisode): ActivityEpisode["events"] {
   const compactedEvents = compactModelContext(episode.events);
+  const hasStrongerEvidence = compactedEvents.some((event) => [
+    "selection_changed",
+    "text_input",
+    "document_changed",
+    "pointer_click",
+    "url_changed",
+    "document_context_changed"
+  ].includes(event.kind));
+  const modelEvents = hasStrongerEvidence
+    ? compactedEvents.filter((event) => event.kind !== "focused_element_changed")
+    : compactedEvents;
   const limits: Partial<Record<ActivityEpisode["events"][number]["kind"], number>> = {
     application_activated: 30,
     window_changed: 40,
     ui_snapshot: 12,
     pointer_click: 80,
-    focused_element_changed: 60,
+    focused_element_changed: 12,
     selection_changed: 60,
     text_input: 60,
     document_changed: 30,
@@ -161,7 +172,7 @@ export function eventsForModel(episode: ActivityEpisode): ActivityEpisode["event
     session_unlocked: 10
   };
   const indicesByKind = new Map<ActivityEpisode["events"][number]["kind"], number[]>();
-  compactedEvents.forEach((event, index) => {
+  modelEvents.forEach((event, index) => {
     const indices = indicesByKind.get(event.kind) ?? [];
     indices.push(index);
     indicesByKind.set(event.kind, indices);
@@ -179,7 +190,7 @@ export function eventsForModel(episode: ActivityEpisode): ActivityEpisode["event
       includedIndices.add(indices[position]!);
     }
   }
-  return compactedEvents.filter((_event, index) => includedIndices.has(index));
+  return modelEvents.filter((_event, index) => includedIndices.has(index));
 }
 
 function compactModelContext(events: ActivityEpisode["events"]): ActivityEpisode["events"] {

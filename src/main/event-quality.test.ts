@@ -26,7 +26,7 @@ test("reports density, duplicates, coverage, and model compression without inspe
   assert.equal(metrics.episodeAdjacentExactDuplicates, 0);
   assert.equal(metrics.coveredSemanticKinds, 2);
   assert(metrics.rawToEpisodeCompressionPercent > 0);
-  assert.equal(metrics.modelCompressionPercent, 0);
+  assert(metrics.modelCompressionPercent > 0);
   assert(metrics.modelPayloadCharacters > 0);
   assert(metrics.approximateModelInputTokens > 0);
 });

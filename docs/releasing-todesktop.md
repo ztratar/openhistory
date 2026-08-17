@@ -133,7 +133,8 @@ Then verify behavior on a clean test account or separate Mac, using the artifact
 5. Cloud-key storage and a generated timeline/hour/day sequence.
 6. Sleep/wake, lock/unlock, and login-item behavior.
 7. Collector startup, pause/resume, and settings changes without a duplicate process or second Accessibility entry.
-8. Complete uninstall/reinstall without unexpected loss of user-owned local data.
+8. Rapid typing in a multiline editor and a sent Messages/iMessage compose test; confirm the complete burst is captured once rather than as partial or duplicate events.
+9. Complete uninstall/reinstall without unexpected loss of user-owned local data.
 
 Run ToDesktop's launch and update smoke test when the selected plan supports it:
 
