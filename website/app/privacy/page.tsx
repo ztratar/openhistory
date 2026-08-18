@@ -13,7 +13,7 @@ export default function PrivacyPage() {
         <Link className="policy-back" href="/" data-analytics-id="privacy_back_home">← OpenHistory</Link>
         <p className="section-label">Privacy policy</p>
         <h1>Your history belongs to you.</h1>
-        <p className="policy-updated">Last updated August 16, 2026</p>
+        <p className="policy-updated">Last updated August 18, 2026</p>
 
         <h2>What the app observes</h2>
         <p>Only after you accept the first-run notice, OpenHistory can observe foreground apps and the macOS Accessibility context you permit. Depending on Settings, that can include window names, focused controls, text changes, clicks, browser URLs or domains, document context, and visible interface text. It does not capture screenshots, camera or microphone input, audio, or low-level keyboard events.</p>
