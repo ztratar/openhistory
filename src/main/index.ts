@@ -63,6 +63,12 @@ import {
 import { InferenceSettingsStore } from "./inference-settings-store";
 import { listInstalledApplications } from "./installed-applications";
 import {
+  anchoredMenuBarWindowPosition,
+  menuBarToggleAction,
+  menuBarTransitionShowDelay,
+  usableTrayBounds
+} from "./menu-bar-position";
+import {
   assertInferenceOnboardingAvailability,
   normalizeInferenceOnboardingSelection
 } from "./inference-onboarding";
@@ -89,6 +95,9 @@ let tray: Tray | undefined;
 let appPresentationMode: AppPresentationMode = "dock";
 let isQuitting = false;
 let menuBarPositionTimer: ReturnType<typeof setTimeout> | undefined;
+let menuBarBlurTimer: ReturnType<typeof setTimeout> | undefined;
+let menuBarWindowShowRequested = false;
+let appPresentationModeTimer: ReturnType<typeof setTimeout> | undefined;
 let collector: CollectorService;
 let inference: InferenceService;
 let timeline: TimelineCoordinator;
@@ -145,7 +154,11 @@ function openHistoryIconPath(): string | undefined {
   return candidates.find(existsSync);
 }
 
-function createWindow(mode: AppPresentationMode, showWhenReady = mode === "dock"): void {
+function createWindow(
+  mode: AppPresentationMode,
+  showWhenReady = mode === "dock",
+  showDelayMilliseconds = 0
+): void {
   const useNativeVibrancy = process.platform === "darwin";
   const icon = openHistoryIconPath();
   const menuBarMode = mode === "menuBar";
@@ -205,19 +218,38 @@ function createWindow(mode: AppPresentationMode, showWhenReady = mode === "dock"
   window.webContents.on("before-input-event", (event, input) => {
     if (menuBarMode && input.type === "keyDown" && input.key === "Escape") {
       event.preventDefault();
-      window.hide();
+      hideMenuBarWindow(window);
     }
   });
   window.on("blur", () => {
-    if (menuBarMode && !isQuitting) window.hide();
+    if (!menuBarMode || isQuitting) return;
+    clearMenuBarBlurTimer();
+    menuBarBlurTimer = setTimeout(() => {
+      menuBarBlurTimer = undefined;
+      hideMenuBarWindow(window);
+    }, 75);
   });
   window.on("closed", () => {
-    if (mainWindow === window) mainWindow = undefined;
+    if (mainWindow === window) {
+      menuBarWindowShowRequested = false;
+      clearMenuBarPositionTimer();
+      clearMenuBarBlurTimer();
+      mainWindow = undefined;
+    }
   });
   window.once("ready-to-show", () => {
     if (!showWhenReady) return;
     if (menuBarMode) {
-      showMenuBarWindowWhenAnchored();
+      menuBarWindowShowRequested = true;
+      if (showDelayMilliseconds > 0) {
+        clearMenuBarPositionTimer();
+        menuBarPositionTimer = setTimeout(() => {
+          menuBarPositionTimer = undefined;
+          showMenuBarWindowWhenAnchored();
+        }, showDelayMilliseconds);
+      } else {
+        showMenuBarWindowWhenAnchored();
+      }
     } else {
       window.show();
       window.focus();
@@ -261,17 +293,12 @@ function trayImage(state: TrayState): Electron.NativeImage {
 function positionMenuBarWindow(): boolean {
   if (!tray || !mainWindow || mainWindow.isDestroyed()) return false;
   const trayBounds = tray.getBounds();
-  if (trayBounds.width <= 0 || trayBounds.height <= 0) return false;
+  if (!usableTrayBounds(trayBounds)) return false;
   const windowBounds = mainWindow.getBounds();
   const workArea = screen.getDisplayMatching(trayBounds).workArea;
-  const margin = 8;
-  const centeredX = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
-  const x = Math.max(
-    workArea.x + margin,
-    Math.min(centeredX, workArea.x + workArea.width - windowBounds.width - margin)
-  );
-  const y = workArea.y + 8;
-  mainWindow.setPosition(x, y, false);
+  const position = anchoredMenuBarWindowPosition(trayBounds, windowBounds, workArea);
+  if (!position) return false;
+  mainWindow.setPosition(position.x, position.y, false);
   return true;
 }
 
@@ -281,15 +308,29 @@ function clearMenuBarPositionTimer(): void {
   menuBarPositionTimer = undefined;
 }
 
+function clearMenuBarBlurTimer(): void {
+  if (!menuBarBlurTimer) return;
+  clearTimeout(menuBarBlurTimer);
+  menuBarBlurTimer = undefined;
+}
+
 function showMenuBarWindowWhenAnchored(attempt = 0): void {
   clearMenuBarPositionTimer();
-  if (appPresentationMode !== "menuBar" || !mainWindow || mainWindow.isDestroyed()) return;
+  if (!menuBarWindowShowRequested) return;
+  if (appPresentationMode !== "menuBar" || !mainWindow || mainWindow.isDestroyed()) {
+    menuBarWindowShowRequested = false;
+    return;
+  }
   if (positionMenuBarWindow()) {
+    menuBarWindowShowRequested = false;
     mainWindow.show();
     mainWindow.focus();
     return;
   }
-  if (attempt >= 40) return;
+  if (attempt >= 40) {
+    menuBarWindowShowRequested = false;
+    return;
+  }
   menuBarPositionTimer = setTimeout(() => {
     menuBarPositionTimer = undefined;
     showMenuBarWindowWhenAnchored(attempt + 1);
@@ -297,12 +338,22 @@ function showMenuBarWindowWhenAnchored(attempt = 0): void {
 }
 
 function showMenuBarWindow(): void {
+  menuBarWindowShowRequested = true;
   if (!mainWindow || mainWindow.isDestroyed()) createWindow("menuBar", true);
   else showMenuBarWindowWhenAnchored();
 }
 
+function hideMenuBarWindow(window = mainWindow): void {
+  menuBarWindowShowRequested = false;
+  clearMenuBarPositionTimer();
+  clearMenuBarBlurTimer();
+  if (window && !window.isDestroyed()) window.hide();
+}
+
 function toggleMenuBarWindow(): void {
-  if (mainWindow?.isVisible()) mainWindow.hide();
+  clearMenuBarBlurTimer();
+  const action = menuBarToggleAction(Boolean(mainWindow?.isVisible()), menuBarWindowShowRequested);
+  if (action === "hide") hideMenuBarWindow();
   else showMenuBarWindow();
 }
 
@@ -359,6 +410,7 @@ function showTrayContextMenu(): void {
 function ensureTray(): void {
   if (tray) return;
   tray = new Tray(trayImage(trayState()));
+  if (process.platform === "darwin") tray.setIgnoreDoubleClickEvents(true);
   tray.on("click", toggleMenuBarWindow);
   tray.on("right-click", showTrayContextMenu);
   refreshTray();
@@ -370,15 +422,26 @@ function destroyTray(): void {
   tray = undefined;
 }
 
-function recreateWindow(mode: AppPresentationMode, showWhenReady: boolean): void {
+function recreateWindow(
+  mode: AppPresentationMode,
+  showWhenReady: boolean,
+  showDelayMilliseconds = 0
+): void {
   const previous = mainWindow;
   mainWindow = undefined;
   previous?.destroy();
-  createWindow(mode, showWhenReady);
+  createWindow(mode, showWhenReady, showDelayMilliseconds);
 }
 
 function applyAppPresentationMode(mode: AppPresentationMode, showWhenReady = false): void {
+  if (appPresentationModeTimer) {
+    clearTimeout(appPresentationModeTimer);
+    appPresentationModeTimer = undefined;
+  }
+  menuBarWindowShowRequested = false;
   clearMenuBarPositionTimer();
+  clearMenuBarBlurTimer();
+  const showDelayMilliseconds = menuBarTransitionShowDelay(appPresentationMode, mode);
   appPresentationMode = mode;
   if (mode === "menuBar") {
     ensureTray();
@@ -387,7 +450,15 @@ function applyAppPresentationMode(mode: AppPresentationMode, showWhenReady = fal
     destroyTray();
     void app.dock?.show();
   }
-  recreateWindow(mode, showWhenReady || mode === "dock");
+  recreateWindow(mode, showWhenReady || mode === "dock", showDelayMilliseconds);
+}
+
+function scheduleAppPresentationMode(mode: AppPresentationMode, showWhenReady = false): void {
+  if (appPresentationModeTimer) clearTimeout(appPresentationModeTimer);
+  appPresentationModeTimer = setTimeout(() => {
+    appPresentationModeTimer = undefined;
+    applyAppPresentationMode(mode, showWhenReady);
+  }, 100);
 }
 
 function bootstrapState(): BootstrapState {
@@ -629,7 +700,7 @@ async function initialize(): Promise<void> {
     }
     const nextState = bootstrapState();
     if (presentationModeChanged) {
-      setTimeout(() => applyAppPresentationMode(saved.appPresentationMode, true), 100);
+      scheduleAppPresentationMode(saved.appPresentationMode, true);
     }
     return nextState;
   });
@@ -732,7 +803,7 @@ async function initialize(): Promise<void> {
     buildHistoryIfNeeded();
     const nextState = bootstrapState();
     if (current.appPresentationMode !== savedSettings.appPresentationMode) {
-      setTimeout(() => applyAppPresentationMode(savedSettings.appPresentationMode, true), 100);
+      scheduleAppPresentationMode(savedSettings.appPresentationMode, true);
     }
     return nextState;
   });
@@ -926,6 +997,8 @@ app.on("before-quit", () => {
   if (automaticHistoryTimer) clearInterval(automaticHistoryTimer);
   if (initialHistoryTimer) clearTimeout(initialHistoryTimer);
   if (catchUpHistoryTimer) clearTimeout(catchUpHistoryTimer);
+  if (appPresentationModeTimer) clearTimeout(appPresentationModeTimer);
+  if (menuBarBlurTimer) clearTimeout(menuBarBlurTimer);
   collector?.stop();
   void agentMcp?.stop();
 });
