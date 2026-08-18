@@ -4,8 +4,8 @@
   "taskManifest": {
     "timeline": {
       "apple": {
-        "inputVersion": "e9-submission-actions",
-        "promptVersion": "apple-timeline-v1",
+        "inputVersion": "e12-search-title-language",
+        "promptVersion": "apple-timeline-v3",
         "schemaName": "timeline_entry_compact",
         "schemaVersion": "timeline-draft-v1",
         "normalizationVersion": "apple-normalization-v2",
@@ -59,10 +59,10 @@
   },
   "artifacts": {
     "timeline.apple": {
-      "sha256": "30a0442e1e5cf8ea128d041e2b95e719816c0d77590fc5d8b67fe32659230a6b",
-      "inputCharacters": 863,
-      "instructionCharacters": 567,
-      "maximumInputCharacters": 907
+      "sha256": "2c644f22710509a5215508f9f768bf2daead4f2cd7383b4308159776612ccffe",
+      "inputCharacters": 1217,
+      "instructionCharacters": 813,
+      "maximumInputCharacters": 1278
     },
     "timeline.cloud": {
       "sha256": "3cac0e2fccaafeda2fc4cf2af5f139c10fa5941c141a8971036b3c45a6aea1af",

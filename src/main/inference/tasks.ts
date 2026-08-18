@@ -37,8 +37,8 @@ function defineTask<T>(
 
 export const TIMELINE_TASK = defineTask("timeline", TimelineDraftSchema, {
   apple: {
-    inputVersion: "e9-submission-actions",
-    promptVersion: "apple-timeline-v1",
+    inputVersion: "e12-search-title-language",
+    promptVersion: "apple-timeline-v3",
     schemaName: "timeline_entry_compact",
     schemaVersion: "timeline-draft-v1",
     normalizationVersion: "apple-normalization-v2",

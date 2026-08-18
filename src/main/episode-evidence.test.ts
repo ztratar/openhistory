@@ -150,7 +150,7 @@ test("ranks explicit outcomes and substantive drafts ahead of incidental activit
   assert.equal(packet.workUnits.at(-1)!.claimCeiling, "literal_interaction");
   const compact = renderCompactEpisodeEvidenceBrief(packet);
   assert.match(compact, /PRIMARY: openhistory\.sh successfully registered!/);
-  assert.match(compact, /Preferred title verbs: Registered/);
+  assert.match(compact, /Useful title language: Registered/);
   assert(compact.length < 4_000);
 });
 
@@ -197,6 +197,34 @@ test("treats address-bar edits as literal navigation intent, not drafted work", 
   assert.match(compact, /PRIMARY: Notes/);
   assert.doesNotMatch(compact, /address or search bar/);
   assert.match(compact, /intentionally excludes clicks and navigation/);
+});
+
+test("uses query and search language for standalone address-bar input", () => {
+  const episode: ActivityEpisode = {
+    id: "episode",
+    startTime: "2026-08-14T17:02:15.000Z",
+    endTime: "2026-08-14T17:10:14.000Z",
+    applications: [],
+    events: [event("address", "text_input", {
+      windowTitle: "New Tab",
+      element: { role: "AXTextField", label: "Address and search bar" },
+      textChange: {
+        insertedText: "PageSpeed Insights",
+        deletedCharacterCount: 0,
+        resultingValue: "PageSpeed Insights"
+      }
+    })]
+  };
+
+  const compact = renderCompactEpisodeEvidenceBrief(buildEpisodeEvidencePacket(episode));
+  assert.match(compact, /PRIMARY: PageSpeed Insights/);
+  assert.doesNotMatch(compact, /PRIMARY: New Tab/);
+  assert.match(compact, /Useful title language: queried, searched, query, search/);
+  assert.match(compact, /Place queried or searched before the query; place query or search after the query/);
+  assert.match(compact, /Address or search query: “PageSpeed Insights”/);
+  assert.match(compact, /an address or search query only/);
+  assert.doesNotMatch(compact, /\b(?:clicked|typed|entered)\b/i);
+  assert.match(compact, /submission was not observed/i);
 });
 
 test("retains consequential later drafts instead of the first three snapshots", () => {
@@ -255,6 +283,58 @@ test("replaces deleted draft content with the later observed state", () => {
   assert.equal(changes.length, 1);
   assert.match(changes[0]!, /Use a projection instead of files/);
   assert.doesNotMatch(changes[0]!, /AI permission controls/);
+});
+
+test("gives Apple evidence-specific title vocabulary without requiring a verb-first title", () => {
+  const episode: ActivityEpisode = {
+    id: "episode",
+    startTime: "2026-08-14T17:02:15.000Z",
+    endTime: "2026-08-14T17:10:14.000Z",
+    applications: [],
+    events: [
+      event("edit", "text_input", {
+        windowTitle: "Marketing pages",
+        textChange: {
+          insertedText: "Make the layout work across devices",
+          deletedCharacterCount: 0,
+          resultingValue: "Make the layout work across all locations and devices"
+        }
+      })
+    ]
+  };
+
+  const packet = buildEpisodeEvidencePacket(episode);
+  const compact = renderCompactEpisodeEvidenceBrief(packet);
+  assert.match(compact, /Useful title language: specified, outlined, proposed, described, wrote, request, proposal, outline, notes/);
+  assert.match(compact, /vocabulary, not a required template/);
+  assert.match(compact, /verb-led/);
+  assert.match(compact, /object-led/);
+  assert.match(compact, /topic-led/);
+  assert.match(compact, /Do not use "Drafted" as a catch-all/);
+});
+
+test("uses deletion and revision verbs for destructive text edits", () => {
+  const deletedEpisode: ActivityEpisode = {
+    id: "deleted",
+    startTime: "2026-08-14T17:02:15.000Z",
+    endTime: "2026-08-14T17:10:14.000Z",
+    applications: [],
+    events: [event("delete", "text_input", {
+      windowTitle: "Chat",
+      textChange: { insertedText: "", deletedCharacterCount: 43, resultingValue: "" }
+    })]
+  };
+  const revisedEpisode: ActivityEpisode = {
+    ...deletedEpisode,
+    id: "revised",
+    events: [event("replace", "text_input", {
+      windowTitle: "Chat",
+      textChange: { insertedText: "shorter", deletedCharacterCount: 43, resultingValue: "shorter" }
+    })]
+  };
+
+  assert.match(renderCompactEpisodeEvidenceBrief(buildEpisodeEvidencePacket(deletedEpisode)), /Useful title language: deleted, removed, edited, deletion, cleanup/);
+  assert.match(renderCompactEpisodeEvidenceBrief(buildEpisodeEvidencePacket(revisedEpisode)), /Useful title language: revised, edited, rewrote, refined, revision, rewrite/);
 });
 
 function event(

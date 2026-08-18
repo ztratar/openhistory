@@ -213,20 +213,31 @@ export function renderCompactEpisodeEvidenceBrief(packet: EpisodeEvidencePacket)
   const excludeIncidentalEvidence = substantiveUnits.length > 0;
   const selectedUnits = (excludeIncidentalEvidence ? substantiveUnits : packet.workUnits).slice(0, 3);
   const units = selectedUnits.map((unit, index) => {
-    const identity = compactSurface(unit.surface ?? unit.application ?? "Unidentified surface");
+    const identity = compactSurface(compactUnitIdentity(unit));
     const evidence = [
       ...unit.demonstratedOutcomes.slice(0, 2),
       ...unit.submissionActions.slice(0, 2),
       ...unit.contentChanges.slice(0, 2),
       ...(excludeIncidentalEvidence ? [] : unit.interactions.slice(0, 3)),
       ...(excludeIncidentalEvidence ? [] : unit.navigation.slice(0, 3))
-    ].map((value) => `- ${normalizeText(value, 700)}`).join("\n");
-    return `${index === 0 ? "PRIMARY" : `SECONDARY ${index}`}: ${identity}\nMaximum supported state: ${claimCeilingDescription(unit.claimCeiling)}\nPreferred title verbs: ${unit.safeLeadVerbs.join(", ")}\nEvidence:\n${evidence || "- No additional detail."}`;
+    ].map((value) => `- ${normalizeText(compactEvidenceLanguage(value), 700)}`).join("\n");
+    const titleLanguage = compactTitleLanguage(unit);
+    const addressOrSearchQuery = unit.claimCeiling === "literal_interaction"
+      && unit.interactions.some((value) => /address or search bar/i.test(value));
+    const maximumSupportedState = unit.claimCeiling === "draft_or_revision"
+      ? "text editing only; not submitted, saved, implemented, completed, or verified"
+      : addressOrSearchQuery
+        ? "an address or search query only; submission, navigation, and results are not established"
+        : claimCeilingDescription(unit.claimCeiling);
+    const titleGrammar = addressOrSearchQuery
+      ? "\nTitle grammar: Place queried or searched before the query; place query or search after the query."
+      : "";
+    return `${index === 0 ? "PRIMARY" : `SECONDARY ${index}`}: ${identity}\nMaximum supported state: ${maximumSupportedState}\nUseful title language: ${titleLanguage.join(", ")}${titleGrammar}\nEvidence:\n${evidence || "- No additional detail."}`;
   }).join("\n\n");
   const selectionRule = excludeIncidentalEvidence
     ? "The brief intentionally excludes clicks and navigation because stronger edited-content or result evidence exists. Do not invent or mention any click, control, application switch, or navigation."
     : "Only literal interaction or navigation evidence was available; describe it modestly.";
-  return `Write one factual work-history title and description in English. Center the PRIMARY unit. Include a secondary unit only when it is materially distinct. Use the strongest concrete nouns from the evidence; never exceed each unit's maximum supported state. ${selectionRule}\n\n${units}\n\nReturn a specific 4–10 word past-tense title and one or two concise factual sentences.`;
+  return `Write one factual work-history title and description in English. Center the PRIMARY unit. Include a secondary unit only when it is materially distinct. Use the strongest concrete nouns from the evidence; never exceed each unit's maximum supported state. ${selectionRule}\n\n${units}\n\nUse the PRIMARY unit's useful title language as vocabulary, not a required template. The title may be verb-led, object-led, or topic-led; choose the form that reads most naturally for the evidence. Do not copy instruction labels or output a schema, type, or property name. Do not use "Drafted" as a catch-all for editing or activity. Return a specific 3–10 word title and one or two concise factual sentences.`;
 }
 
 function evidenceStrength(event: ActivityEvent): "direct_action" | "navigation" | "context" | "boundary" {
@@ -420,6 +431,43 @@ function claimCeilingDescription(value: EpisodeEvidenceWorkUnit["claimCeiling"])
     return "the literal click or selection only; the labeled action's result is not established";
   }
   return "navigation or viewing only; no change or outcome is established";
+}
+
+function textChangeTitleLanguage(changes: string[]): string[] {
+  if (changes.length > 0 && changes.every((change) => /^Deleted \d+ characters\.$/.test(change))) {
+    return ["deleted", "removed", "edited", "deletion", "cleanup"];
+  }
+  if (changes.some((change) => /^Replaced \d+ characters|^Deleted \d+ characters\.$/.test(change))) {
+    return ["revised", "edited", "rewrote", "refined", "revision", "rewrite"];
+  }
+  const text = changes.map(quotedPayload).join(" ");
+  if (/\b(?:should|must|do not|don't|please|request|recommend|propose|make|change|add|remove|build|implement|fix|use|instead)\b/i.test(text)) {
+    return ["specified", "outlined", "proposed", "described", "wrote", "request", "proposal", "outline", "notes"];
+  }
+  return ["edited", "wrote", "composed", "revised", "refined", "edits", "notes", "writing", "revision"];
+}
+
+function compactTitleLanguage(unit: EpisodeEvidenceWorkUnit): string[] {
+  if (unit.claimCeiling === "draft_or_revision") return textChangeTitleLanguage(unit.contentChanges);
+  if (unit.claimCeiling === "literal_interaction" && unit.interactions.some((value) => /address or search bar/i.test(value))) {
+    return ["queried", "searched", "query", "search"];
+  }
+  return unit.safeLeadVerbs;
+}
+
+function compactEvidenceLanguage(value: string): string {
+  const addressQuery = value.match(/^Entered “(.+)” in the address or search bar; submission was not observed\.$/i);
+  return addressQuery
+    ? `Address or search query: “${addressQuery[1]}”; submission was not observed.`
+    : value;
+}
+
+function compactUnitIdentity(unit: EpisodeEvidenceWorkUnit): string {
+  for (const interaction of unit.interactions) {
+    const addressQuery = interaction.match(/^Entered “(.+)” in the address or search bar;/i);
+    if (addressQuery) return addressQuery[1]!;
+  }
+  return unit.surface ?? unit.application ?? "Unidentified surface";
 }
 
 function submissionActionVerbs(actions: string[]): string[] {

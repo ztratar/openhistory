@@ -121,9 +121,9 @@ private struct TimelineGeneration: Encodable {
 @available(macOS 26.0, *)
 @Generable
 private struct TimelineNarrativeGeneration: Encodable {
-    @Guide(description: "A 4 to 10 word title beginning with a concrete evidence-calibrated past-tense verb. Never use a date, time range, application list, or telemetry label as the title.")
+    @Guide(description: "A natural-language heading of 3 to 10 words naming the meaningful action, work object, or topic. It may be verb-led, object-led, or topic-led. Never output a date, time range, application list, telemetry label, schema name, type name, or property name as the title.")
     var title: String
-    @Guide(description: "One or two factual sentences about the meaningful user action or demonstrated result. Preserve whether work was drafted, requested, observed, changed, or verified. Do not narrate telemetry.")
+    @Guide(description: "One or two factual sentences about the meaningful user action or demonstrated result. Preserve the evidence-supported state without turning editing or a request into completion. Do not narrate telemetry.")
     var description: String
 }
 
