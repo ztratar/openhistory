@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { AppleInferenceUnavailabilityReason } from "@shared/inference";
 import type { InferenceProviderAdapter, StructuredGenerationRequest } from "../contracts";
+import { InferenceOutputError } from "../errors";
 
 export interface AppleWorkerResponse {
   ok: boolean;
@@ -107,10 +108,19 @@ export class AppleFoundationModelProvider implements InferenceProviderAdapter {
         workerRequest(request, minimalAppleInput(request.input), this.adapterPath)
       );
     }
+    if (!response.ok && /decodingFailure|failed to extract content|invalid output/i.test(response.reason ?? "")) {
+      throw new InferenceOutputError("invalid_output");
+    }
     if (!response.ok || !response.output) {
       throw new Error(response.reason ?? "Apple's on-device model did not return output.");
     }
-    return request.schema.parse(normalizeAppleOutput(request.schemaName, JSON.parse(response.output)));
+    let output: unknown;
+    try {
+      output = JSON.parse(response.output);
+    } catch {
+      throw new InferenceOutputError("invalid_output");
+    }
+    return request.schema.parse(normalizeAppleOutput(request.schemaName, output, request.input));
   }
 }
 
@@ -162,7 +172,7 @@ function reduce(value: unknown): unknown {
     .map(([key, entry]) => [key, reduce(entry)]));
 }
 
-export function normalizeAppleOutput(schemaName: string, value: unknown): unknown {
+export function normalizeAppleOutput(schemaName: string, value: unknown, input = ""): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const record = value as Record<string, unknown>;
   const maxLengths: Record<string, number> = schemaName.startsWith("daily_rollup")
@@ -179,16 +189,56 @@ export function normalizeAppleOutput(schemaName: string, value: unknown): unknow
   }));
   if (["hour_rollup", "hour_rollup_compact", "daily_rollup", "daily_rollup_compact"].includes(schemaName)
     && typeof normalized.summary === "string") {
-    normalized.summary = truncate(normalized.summary.split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.startsWith("- ") ? line : `- ${line.replace(/^[-•]\s*/, "")}`)
-      .join("\n"), maxLengths.summary ?? 1_200);
+    normalized.summary = normalizeRollupBullets(
+      normalized.summary,
+      schemaName.startsWith("daily_rollup") ? 5 : 4,
+      maxLengths.summary ?? 1_200
+    );
+    if (Array.isArray(normalized.linkReferences)) {
+      normalized.linkReferences = normalizeLinkReferences(normalized.linkReferences, input);
+    }
   }
   if (["timeline_entry", "timeline_entry_compact", "timeline_entry_compact_parts"].includes(schemaName)) {
     normalized.suggestion = null;
   }
   return normalized;
+}
+
+function normalizeRollupBullets(value: string, maximumBullets: number, maximumLength: number): string {
+  const bullets: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of value.trim().split(/\r?\n+|\s+(?=[-•]\s+)/)) {
+    const bullet = raw.trim()
+      .replace(/^(?:[-•]\s*)+/, "")
+      .replace(/;\s*$/, "")
+      .trim();
+    if (!bullet) continue;
+    const key = bullet.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    bullets.push(bullet);
+    seen.add(key);
+    if (bullets.length >= maximumBullets) break;
+  }
+  return truncate(bullets.map((bullet) => `- ${bullet}`).join("\n"), maximumLength);
+}
+
+function normalizeLinkReferences(values: unknown[], input: string): string[] {
+  const referenceByLabel = new Map<string, string>();
+  for (const match of input.matchAll(/^(link-[1-9]\d*): “([^”]+)” \([^)]+\)$/gm)) {
+    referenceByLabel.set(match[2]!.replace(/\s+/g, " ").trim().toLocaleLowerCase(), match[1]!);
+  }
+  const references: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const normalized = value.replace(/\s+/g, " ").trim();
+    const reference = /^link-[1-9]\d*$/.test(normalized)
+      ? normalized
+      : referenceByLabel.get(normalized.toLocaleLowerCase());
+    if (!reference || references.includes(reference)) continue;
+    references.push(reference);
+    if (references.length >= 5) break;
+  }
+  return references;
 }
 
 function truncate(value: string, maximum: number): string {

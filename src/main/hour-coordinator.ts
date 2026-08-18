@@ -2,6 +2,7 @@ import type { HourItem, HourState, TimelineItem } from "@shared/contracts";
 import { HourStore } from "./hour-store";
 import { InferenceService } from "./openai-service";
 import { inferenceErrorMetadata, publicInferenceErrorMessage } from "./openai-error";
+import { isItemScopedInferenceError } from "./inference/errors";
 import { timelineRevision } from "./provenance";
 import { TimelineStore } from "./timeline-store";
 
@@ -48,16 +49,33 @@ export class HourCoordinator {
       const pending = this.pendingHours()
         .slice(0, MAX_HOURS_PER_REQUEST)
         .sort((left, right) => Date.parse(left.startTime) - Date.parse(right.startTime));
+      let itemError: unknown;
       for (const hour of pending) {
-        this.hourStore.save(
-          await this.inference.consolidateHour(
-            hour.startTime,
-            hour.endTime,
-            hour.timelineItems,
-            this.previousHour(hour.startTime)
-          )
+        try {
+          this.hourStore.save(
+            await this.inference.consolidateHour(
+              hour.startTime,
+              hour.endTime,
+              hour.timelineItems,
+              this.previousHour(hour.startTime)
+            )
+          );
+          onStateChange?.(this.getState());
+        } catch (error) {
+          if (!isItemScopedInferenceError(error)) throw error;
+          itemError = error;
+          console.error("Hour consolidation skipped one hour", inferenceErrorMetadata(
+            error,
+            this.inference.provider
+          ));
+        }
+      }
+      if (itemError) {
+        this.lastError = publicInferenceErrorMessage(
+          itemError,
+          "Hour consolidation",
+          this.inference.provider
         );
-        onStateChange?.(this.getState());
       }
     } catch (error) {
       this.lastError = publicInferenceErrorMessage(error, "Hour consolidation", this.inference.provider);

@@ -44,6 +44,12 @@ import {
   DAILY_ROLLUP_INSTRUCTIONS,
   SUMMARY_INSTRUCTIONS
 } from "./prompts";
+import {
+  ensureAppleDayCoverage,
+  ensureAppleHourCoverage,
+  fallbackAppleDayDraft,
+  fallbackAppleHourDraft
+} from "./rollup-coverage";
 
 export * from "./prompts";
 const MAX_GENERATION_ATTEMPTS = 2;
@@ -142,7 +148,17 @@ export class InferenceService {
     timelineItems: TimelineItem[],
     lastHour?: HourItem
   ): Promise<HourItem> {
-    const draft = await this.generate(buildHourGenerationRequest(this.provider, timelineItems, lastHour));
+    let generated;
+    try {
+      generated = await this.generate(buildHourGenerationRequest(this.provider, timelineItems, lastHour));
+    } catch (error) {
+      if (this.provider !== "apple") throw error;
+      console.warn("Apple hour generation used deterministic local fallback", {
+        name: error instanceof Error ? error.name : "UnknownError"
+      });
+      generated = fallbackAppleHourDraft(timelineItems);
+    }
+    const draft = this.provider === "apple" ? ensureAppleHourCoverage(generated, timelineItems) : generated;
     const candidates = rollupLinkCandidates(timelineItems);
     const { linkReferences, ...content } = draft;
     return {
@@ -151,7 +167,7 @@ export class InferenceService {
       startTime,
       endTime,
       applications: uniqueTimelineApplications(timelineItems),
-      links: selectedRollupLinks(draft.summary, candidates, linkReferences),
+      links: selectedRollupLinks(draft.summary, candidates, linkReferences, this.provider === "apple"),
       sourceTimelineIds: timelineItems.map((item) => item.id).sort(),
       sourceTimelineRevisions: timelineItems.flatMap((item) => {
         const revision = timelineRevision(item);
@@ -169,21 +185,33 @@ export class InferenceService {
     hourItems: HourItem[] = []
   ): Promise<DailyRollupItem> {
     const unrolledTimeline = unrolledTimelineItems(timelineItems, hourItems);
-    const draft = await this.generate(buildDailyRollupGenerationRequest(
-      this.provider,
-      date,
-      timelineItems,
-      existing,
-      hourItems,
-      unrolledTimeline
-    ));
+    let generated;
+    try {
+      generated = await this.generate(buildDailyRollupGenerationRequest(
+        this.provider,
+        date,
+        timelineItems,
+        existing,
+        hourItems,
+        unrolledTimeline
+      ));
+    } catch (error) {
+      if (this.provider !== "apple") throw error;
+      console.warn("Apple daily generation used deterministic local fallback", {
+        name: error instanceof Error ? error.name : "UnknownError"
+      });
+      generated = fallbackAppleDayDraft(hourItems, unrolledTimeline, timelineItems);
+    }
+    const draft = this.provider === "apple"
+      ? ensureAppleDayCoverage(generated, hourItems, unrolledTimeline, timelineItems)
+      : generated;
     const candidates = rollupLinkCandidates([...hourItems, ...unrolledTimeline]);
     const { linkReferences, ...content } = draft;
     return {
       version: 2,
       id: date,
       date,
-      links: selectedRollupLinks(draft.summary, candidates, linkReferences),
+      links: selectedRollupLinks(draft.summary, candidates, linkReferences, this.provider === "apple"),
       sourceTimelineIds: timelineItems.map((item) => item.id).sort(),
       sourceTimelineRevisions: timelineItems.flatMap((item) => {
         const revision = timelineRevision(item);

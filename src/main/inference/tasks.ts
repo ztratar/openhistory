@@ -56,11 +56,11 @@ export const TIMELINE_TASK = defineTask("timeline", TimelineDraftSchema, {
 
 export const HOUR_TASK = defineTask("hour", HourDraftSchema, {
   apple: {
-    inputVersion: "h2-semantic-link-candidates",
-    promptVersion: "apple-hour-v2",
+    inputVersion: "h3-budgeted-semantic-link-candidates",
+    promptVersion: "apple-hour-v3",
     schemaName: "hour_rollup_compact",
     schemaVersion: "hour-draft-v2",
-    normalizationVersion: "apple-normalization-v2",
+    normalizationVersion: "apple-normalization-v3-grounded-coverage",
     maxOutputTokens: 650
   },
   cloud: {
@@ -75,11 +75,11 @@ export const HOUR_TASK = defineTask("hour", HourDraftSchema, {
 
 export const DAY_TASK = defineTask("day", DailyRollupDraftSchema, {
   apple: {
-    inputVersion: "d3-semantic-link-candidates",
-    promptVersion: "apple-day-v2",
+    inputVersion: "d4-budgeted-semantic-link-candidates",
+    promptVersion: "apple-day-v3",
     schemaName: "daily_rollup_compact",
     schemaVersion: "daily-rollup-draft-v3",
-    normalizationVersion: "apple-normalization-v2",
+    normalizationVersion: "apple-normalization-v3-grounded-coverage",
     maxOutputTokens: 750
   },
   cloud: {

@@ -9,6 +9,7 @@ import { HourStore } from "./hour-store";
 import { DailyRollupCoordinator } from "./daily-rollup-coordinator";
 import { DailyRollupStore } from "./daily-rollup-store";
 import { InferenceService } from "./openai-service";
+import { InferenceOutputError } from "./inference/errors";
 import { TimelineStore } from "./timeline-store";
 import { timelineRevision } from "./provenance";
 
@@ -95,6 +96,41 @@ test("supplies only provenance-current hour rollups to daily consolidation", asy
   };
   await coordinator.consolidatePending();
   assert.deepEqual(suppliedHours, []);
+});
+
+test("continues consolidating later days after one item-scoped failure", async (context) => {
+  const root = await mkdtemp(resolve(tmpdir(), "openhistory-daily-isolation-"));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const timelineStore = new TimelineStore(resolve(root, "timeline"));
+  const first = sampleTimelineItem();
+  const second: TimelineItem = {
+    ...sampleTimelineItem(),
+    id: "episode-two",
+    startTime: "2026-08-15T12:00:00.000Z",
+    endTime: "2026-08-15T12:08:00.000Z",
+    sourceEventIds: ["event-two"]
+  };
+  timelineStore.save(first);
+  timelineStore.save(second);
+  const inference = new InferenceService({ apiKey: "test-key", settings: testInferenceSettings() });
+  const calls: string[] = [];
+  inference.consolidateDailyRollup = async (date, items) => {
+    calls.push(date);
+    if (date === "2026-08-14") throw new InferenceOutputError("invalid_output");
+    return { ...sampleDailyRollup(items[0]!), id: date, date };
+  };
+  const coordinator = new DailyRollupCoordinator(
+    timelineStore,
+    new DailyRollupStore(resolve(root, "daily-rollups")),
+    inference
+  );
+
+  const state = await coordinator.consolidatePending();
+
+  assert.deepEqual(calls, ["2026-08-14", "2026-08-15"]);
+  assert.deepEqual(state.items.map(({ date }) => date), ["2026-08-15"]);
+  assert.equal(state.pendingDayCount, 1);
+  assert.match(state.lastError ?? "", /couldn't update part of your timeline/i);
 });
 
 function sampleDailyRollup(source: TimelineItem): DailyRollupItem {

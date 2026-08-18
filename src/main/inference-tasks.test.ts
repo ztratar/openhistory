@@ -21,8 +21,8 @@ test("versions every production inference input, prompt, schema, and token limit
     }
   }
   assert.equal(manifest.timeline.apple.inputVersion, "e12-search-title-language");
-  assert.equal(manifest.hour.apple.inputVersion, "h2-semantic-link-candidates");
-  assert.equal(manifest.day.apple.inputVersion, "d3-semantic-link-candidates");
+  assert.equal(manifest.hour.apple.inputVersion, "h3-budgeted-semantic-link-candidates");
+  assert.equal(manifest.day.apple.inputVersion, "d4-budgeted-semantic-link-candidates");
 });
 
 test("keeps production task definitions immutable", () => {

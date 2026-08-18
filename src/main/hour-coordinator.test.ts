@@ -8,6 +8,7 @@ import test from "node:test";
 import { HourCoordinator, hourStartForTimestamp } from "./hour-coordinator";
 import { HourStore } from "./hour-store";
 import { InferenceService } from "./openai-service";
+import { InferenceOutputError } from "./inference/errors";
 import { timelineRevision } from "./provenance";
 import { TimelineStore } from "./timeline-store";
 
@@ -87,6 +88,38 @@ test("floors timestamps to the start of their local clock hour", () => {
   assert.equal(start.getMilliseconds(), 0);
 });
 
+test("continues consolidating later hours after one item-scoped failure", async (context) => {
+  const root = await mkdtemp(resolve(tmpdir(), "openhistory-hour-isolation-"));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const timelineStore = new TimelineStore(resolve(root, "timeline"));
+  const first = sampleTimelineItem();
+  const second: TimelineItem = {
+    ...sampleTimelineItem(),
+    id: "episode-two",
+    startTime: "2020-08-14T13:08:00.000Z",
+    endTime: "2020-08-14T13:16:00.000Z",
+    sourceEventIds: ["event-two"]
+  };
+  timelineStore.save(first);
+  timelineStore.save(second);
+  const service = new RecordingInferenceService(hourStartForTimestamp(first.startTime));
+  const coordinator = new HourCoordinator(
+    timelineStore,
+    new HourStore(resolve(root, "hours")),
+    service
+  );
+
+  const state = await coordinator.consolidatePending();
+
+  assert.deepEqual(service.calls.map(({ startTime }) => startTime), [
+    hourStartForTimestamp(first.startTime),
+    hourStartForTimestamp(second.startTime)
+  ]);
+  assert.deepEqual(state.items.map(({ id }) => id), [hourStartForTimestamp(second.startTime)]);
+  assert.equal(state.pendingHourCount, 1);
+  assert.match(state.lastError ?? "", /couldn't update part of your timeline/i);
+});
+
 function sampleTimelineItem(): TimelineItem {
   return {
     version: 1,
@@ -121,7 +154,7 @@ function sampleHour(source: TimelineItem, startTime: string, endTime: string): H
 class RecordingInferenceService extends InferenceService {
   readonly calls: Array<{ startTime: string; lastHourId?: string }> = [];
 
-  constructor() {
+  constructor(private readonly failedStartTime?: string) {
     super({ settings: testInferenceSettings() });
   }
 
@@ -136,6 +169,7 @@ class RecordingInferenceService extends InferenceService {
     lastHour?: HourItem
   ): Promise<HourItem> {
     this.calls.push({ startTime, lastHourId: lastHour?.id });
+    if (startTime === this.failedStartTime) throw new InferenceOutputError("invalid_output");
     return {
       version: 1,
       id: startTime,

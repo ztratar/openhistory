@@ -22,11 +22,11 @@
     },
     "hour": {
       "apple": {
-        "inputVersion": "h2-semantic-link-candidates",
-        "promptVersion": "apple-hour-v2",
+        "inputVersion": "h3-budgeted-semantic-link-candidates",
+        "promptVersion": "apple-hour-v3",
         "schemaName": "hour_rollup_compact",
         "schemaVersion": "hour-draft-v2",
-        "normalizationVersion": "apple-normalization-v2",
+        "normalizationVersion": "apple-normalization-v3-grounded-coverage",
         "maxOutputTokens": 650
       },
       "cloud": {
@@ -40,11 +40,11 @@
     },
     "day": {
       "apple": {
-        "inputVersion": "d3-semantic-link-candidates",
-        "promptVersion": "apple-day-v2",
+        "inputVersion": "d4-budgeted-semantic-link-candidates",
+        "promptVersion": "apple-day-v3",
         "schemaName": "daily_rollup_compact",
         "schemaVersion": "daily-rollup-draft-v3",
-        "normalizationVersion": "apple-normalization-v2",
+        "normalizationVersion": "apple-normalization-v3-grounded-coverage",
         "maxOutputTokens": 750
       },
       "cloud": {
@@ -71,10 +71,10 @@
       "maximumInputCharacters": 2913
     },
     "hour.apple": {
-      "sha256": "69396d790940ac69858e33faa285816348d5f12391ecd244f1472350a6b7abf3",
-      "inputCharacters": 901,
-      "instructionCharacters": 652,
-      "maximumInputCharacters": 947
+      "sha256": "12ace5f2ff57f2a8877b4d2e91b209c0cddce29244d80ddfa068c9f94222565d",
+      "inputCharacters": 947,
+      "instructionCharacters": 1081,
+      "maximumInputCharacters": 995
     },
     "hour.cloud": {
       "sha256": "34318447262ac32124afa7e6e8b0382511a3fe148623c62d886973d5daa7074e",
@@ -83,10 +83,10 @@
       "maximumInputCharacters": 1339
     },
     "day.apple": {
-      "sha256": "e003df57e72b8c504dd39c422e053d51d3ea97a52abab1ce31355926c36f871e",
-      "inputCharacters": 941,
-      "instructionCharacters": 744,
-      "maximumInputCharacters": 989
+      "sha256": "9121daeafb48bce7e0477e357176cc1123c85950d129930051169e03dbfe0aab",
+      "inputCharacters": 993,
+      "instructionCharacters": 1114,
+      "maximumInputCharacters": 1043
     },
     "day.cloud": {
       "sha256": "085eb62aa5082728a722dd4ef9109783ea6c841d8c08605ffc7a47e002d26e19",
