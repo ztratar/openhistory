@@ -1,7 +1,7 @@
 {
   "name": "openhistory",
   "productName": "OpenHistory",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "author": "Zach Tratar <955182+ztratar@users.noreply.github.com>",
   "license": "MIT",
