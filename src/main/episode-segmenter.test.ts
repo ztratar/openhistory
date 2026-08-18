@@ -3,6 +3,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { segmentActivityEvents } from "./episode-segmenter";
 
+test("keeps continuous work in one episode until the thirteen-minute maximum", () => {
+  const beforeMaximum = [0, 4, 8, 12, 12.99].map((minute, index) =>
+    semanticAppEvent(
+      `before-${index}`,
+      new Date(Date.parse("2026-08-14T09:00:00Z") + minute * 60 * 1_000).toISOString(),
+      "com.example.Editor"
+    )
+  );
+  const atMaximum = [
+    ...beforeMaximum,
+    semanticAppEvent("at-maximum", "2026-08-14T09:13:00Z", "com.example.Editor")
+  ];
+
+  assert.equal(segmentActivityEvents(beforeMaximum).length, 1);
+  assert.equal(segmentActivityEvents(atMaximum).length, 2);
+});
+
 test("groups related activity inside a ten-minute episode", () => {
   const episodes = segmentActivityEvents([
     semanticAppEvent("one", "2026-08-14T09:00:00Z", "com.example.Editor"),

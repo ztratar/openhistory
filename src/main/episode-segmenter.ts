@@ -6,7 +6,7 @@ import type {
 import { createHash } from "node:crypto";
 import { filterProtectedActivityEvents } from "./privacy-policy";
 
-const DEFAULT_MAX_DURATION_MS = 10 * 60 * 1_000;
+const DEFAULT_MAX_DURATION_MS = 13 * 60 * 1_000;
 const DEFAULT_IDLE_GAP_MS = 5 * 60 * 1_000;
 const DEFAULT_CONTEXT_SWITCH_GAP_MS = 2 * 60 * 1_000;
 const DEFAULT_CONTEXT_LEAD_MS = 30 * 1_000;

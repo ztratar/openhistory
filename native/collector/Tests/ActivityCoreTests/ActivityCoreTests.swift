@@ -2,6 +2,39 @@ import Foundation
 import Testing
 @testable import ActivityCore
 
+@Test func unavailableBrowserURLSuppressesCaptureWithoutCreatingAPrivacyTransition() {
+    let decision = SemanticProtectionPolicy.browserProtectionDecision(
+        for: .unavailable,
+        wasProtected: false
+    )
+    #expect(decision.suppressCapture)
+    #expect(decision.transition == .none)
+}
+
+@Test func unavailableBrowserURLDoesNotEndAnEstablishedProtectedContext() {
+    let decision = SemanticProtectionPolicy.browserProtectionDecision(
+        for: .unavailable,
+        wasProtected: true
+    )
+    #expect(decision.suppressCapture)
+    #expect(decision.transition == .none)
+}
+
+@Test func confirmedBrowserProtectionChangesStillCreatePrivacyTransitions() {
+    let entering = SemanticProtectionPolicy.browserProtectionDecision(
+        for: .protected,
+        wasProtected: false
+    )
+    let leaving = SemanticProtectionPolicy.browserProtectionDecision(
+        for: .safe,
+        wasProtected: true
+    )
+    #expect(entering.transition == .enter)
+    #expect(leaving.transition == .leave)
+    #expect(entering.suppressCapture)
+    #expect(!leaving.suppressCapture)
+}
+
 @Test func eventEncodingUsesTheSharedWireFormat() throws {
     let event = ActivityEvent(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,

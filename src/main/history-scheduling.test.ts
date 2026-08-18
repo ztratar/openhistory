@@ -6,8 +6,8 @@ import {
   shouldScheduleHistoryCatchUp
 } from "./history-scheduling";
 
-test("checks for ordinary history updates every ten minutes", () => {
-  assert.equal(AUTOMATIC_HISTORY_INTERVAL_MS, 10 * 60 * 1_000);
+test("checks every minute for an episode whose holding window has elapsed", () => {
+  assert.equal(AUTOMATIC_HISTORY_INTERVAL_MS, 60 * 1_000);
 });
 
 test("quickly follows a productive partial history batch", () => {

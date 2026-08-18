@@ -13,10 +13,15 @@ test("a malformed episode does not block later timeline summaries", async () => 
   const directory = mkdtempSync(join(tmpdir(), "openhistory-timeline-coordinator-"));
   try {
     const first = event("first", "2026-08-14T09:00:00Z");
-    const second = event("second", "2026-08-14T09:06:00Z");
+    const firstMiddle = event("first-middle", "2026-08-14T09:04:30Z");
+    const firstEnd = event("first-end", "2026-08-14T09:09:00Z");
+    const second = event("second", "2026-08-14T09:20:00Z");
+    const secondMiddle = event("second-middle", "2026-08-14T09:24:30Z");
+    const secondEnd = event("second-end", "2026-08-14T09:29:00Z");
     writeFileSync(
       join(directory, "events-2026-08-14.jsonl"),
-      [first, second].map((entry) => JSON.stringify(entry)).join("\n")
+      [first, firstMiddle, firstEnd, second, secondMiddle, secondEnd]
+        .map((entry) => JSON.stringify(entry)).join("\n")
     );
 
     const calls: string[] = [];
@@ -43,6 +48,51 @@ test("a malformed episode does not block later timeline summaries", async () => 
     assert.equal(state.items.length, 1);
     assert.equal(state.pendingEpisodeCount, 1);
     assert.match(state.lastError ?? "", /couldn't update part of your timeline/i);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("holds a short work burst until its eight-minute window has elapsed", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openhistory-timeline-coordinator-"));
+  try {
+    writeFileSync(
+      join(directory, "events-2026-08-14.jsonl"),
+      [
+        event("short-start", "2026-08-14T09:00:00Z"),
+        event("short-end", "2026-08-14T09:04:00Z")
+      ].map((entry) => JSON.stringify(entry)).join("\n")
+    );
+
+    let callCount = 0;
+    const inference = {
+      configured: true,
+      provider: "openai" as const,
+      unavailableMessage: "Unavailable",
+      summarizeEpisode: async (episode: ActivityEpisode): Promise<TimelineItem> => {
+        callCount += 1;
+        return timelineItem(episode);
+      }
+    } as unknown as InferenceService;
+    const coordinator = new TimelineCoordinator(
+      directory,
+      new TimelineStore(join(directory, "timeline")),
+      inference
+    );
+
+    assert.equal(
+      coordinator.getState(Date.parse("2026-08-14T09:07:59Z")).pendingEpisodeCount,
+      0
+    );
+    assert.equal(
+      coordinator.getState(Date.parse("2026-08-14T09:08:00Z")).pendingEpisodeCount,
+      1
+    );
+
+    const state = await coordinator.summarizePending();
+    assert.equal(callCount, 1);
+    assert.equal(state.pendingEpisodeCount, 0);
+    assert.equal(state.items.length, 1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

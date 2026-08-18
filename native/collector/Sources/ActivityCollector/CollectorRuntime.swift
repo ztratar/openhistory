@@ -516,8 +516,11 @@ final class ApplicationActivityCollector: @unchecked Sendable {
             return BrowserContext(observation: nil, isProtected: false)
         }
         if SemanticProtectionPolicy.protectsPrivateBrowsingWindow(title: windowTitle) {
-            enterProtectedBrowserContext(processIdentifier: application.processIdentifier)
-            return BrowserContext(observation: nil, isProtected: true)
+            return applyBrowserProtection(
+                .protected,
+                observation: nil,
+                processIdentifier: application.processIdentifier
+            )
         }
         guard let rawURL,
               let observation = SemanticSanitizer.browserObservation(
@@ -525,22 +528,42 @@ final class ApplicationActivityCollector: @unchecked Sendable {
                   title: nil,
                   redactEmailAddresses: !configuration.emailActivity
               ) else {
-            let protected = SemanticProtectionPolicy.browserApplications.contains(bundleIdentifier) ||
-                protectedBrowserProcessIdentifier == application.processIdentifier
-            if protected { enterProtectedBrowserContext(processIdentifier: application.processIdentifier) }
-            return BrowserContext(observation: nil, isProtected: protected)
+            return applyBrowserProtection(
+                .unavailable,
+                observation: nil,
+                processIdentifier: application.processIdentifier
+            )
         }
         let protected = SemanticProtectionPolicy.protectsBrowserObservation(
             observation,
             captureEmailActivity: configuration.emailActivity,
             captureMessagingActivity: configuration.messagingActivity
         )
-        if protected {
-            enterProtectedBrowserContext(processIdentifier: application.processIdentifier)
-        } else if protectedBrowserProcessIdentifier == application.processIdentifier {
+        return applyBrowserProtection(
+            protected ? .protected : .safe,
+            observation: observation,
+            processIdentifier: application.processIdentifier
+        )
+    }
+
+    private func applyBrowserProtection(
+        _ observationState: BrowserProtectionObservation,
+        observation: BrowserObservation?,
+        processIdentifier: pid_t
+    ) -> BrowserContext {
+        let decision = SemanticProtectionPolicy.browserProtectionDecision(
+            for: observationState,
+            wasProtected: protectedBrowserProcessIdentifier == processIdentifier
+        )
+        switch decision.transition {
+        case .none:
+            break
+        case .enter:
+            enterProtectedBrowserContext(processIdentifier: processIdentifier)
+        case .leave:
             leaveProtectedBrowserContext()
         }
-        return BrowserContext(observation: observation, isProtected: protected)
+        return BrowserContext(observation: observation, isProtected: decision.suppressCapture)
     }
 
     private func enterProtectedBrowserContext(processIdentifier: pid_t) {

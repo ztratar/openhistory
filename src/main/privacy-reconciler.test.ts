@@ -18,10 +18,16 @@ test("scrubs protected raw events and removes stale derived summaries", async (c
   const safeEvent = browserEvent("safe-event", "2026-08-15T09:00:00.000Z", "focused_element_changed", {
     element: { role: "AXWebArea", title: "Safe work" }
   });
-  const adultNavigation = browserEvent("adult-url", "2026-08-15T09:01:00.000Z", "url_changed", {
+  const safeMiddle = browserEvent("safe-middle", "2026-08-15T09:04:30.000Z", "focused_element_changed", {
+    element: { role: "AXWebArea", title: "Safe work" }
+  });
+  const safeEnd = browserEvent("safe-end", "2026-08-15T09:09:00.000Z", "focused_element_changed", {
+    element: { role: "AXWebArea", title: "Safe work" }
+  });
+  const adultNavigation = browserEvent("adult-url", "2026-08-15T09:10:00.000Z", "url_changed", {
     browser: { url: "https://pornhub.com/private", domain: "pornhub.com" }
   });
-  const adultText = browserEvent("adult-text", "2026-08-15T09:01:01.000Z", "text_input", {
+  const adultText = browserEvent("adult-text", "2026-08-15T09:10:01.000Z", "text_input", {
     element: { role: "AXTextField", label: "private adult field" },
     textChange: {
       insertedText: "private adult text",
@@ -31,13 +37,14 @@ test("scrubs protected raw events and removes stale derived summaries", async (c
   });
   writeFileSync(
     resolve(directory, "events-2026-08-15.jsonl"),
-    [safeEvent, adultNavigation, adultText].map((event) => JSON.stringify(event)).join("\n")
+    [safeEvent, safeMiddle, safeEnd, adultNavigation, adultText]
+      .map((event) => JSON.stringify(event)).join("\n")
   );
 
   const timelineStore = new TimelineStore(resolve(directory, "timeline"));
   const hourStore = new HourStore(resolve(directory, "hours"));
   const dailyRollupStore = new DailyRollupStore(resolve(directory, "daily-rollups"));
-  const safeEpisode = segmentActivityEvents([safeEvent])[0]!;
+  const safeEpisode = segmentActivityEvents([safeEvent, safeMiddle, safeEnd])[0]!;
   const safeTimeline = timelineItem(safeEpisode.id, safeEpisode.events.map(({ id }) => id), "Safe work");
   const privateTimeline = timelineItem("private-episode", ["adult-url", "adult-text"], "Private adult summary");
   timelineStore.save(safeTimeline);
@@ -61,6 +68,48 @@ test("scrubs protected raw events and removes stale derived summaries", async (c
   const raw = readFileSync(resolve(directory, "events-2026-08-15.jsonl"), "utf8");
   assert.doesNotMatch(raw, /pornhub|private adult/);
   assert.match(raw, /safe-event/);
+});
+
+test("preserves summarized short work bursts and their rollups", async (context) => {
+  const directory = await mkdtemp(resolve(tmpdir(), "openhistory-short-reconcile-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const start = browserEvent("short-start", "2026-08-15T09:00:00.000Z", "pointer_click", {
+    element: { role: "AXButton", title: "Start" }
+  });
+  const end = browserEvent("short-end", "2026-08-15T09:04:00.000Z", "pointer_click", {
+    element: { role: "AXButton", title: "Finish" }
+  });
+  writeFileSync(
+    resolve(directory, "events-2026-08-15.jsonl"),
+    [start, end].map((event) => JSON.stringify(event)).join("\n")
+  );
+
+  const timelineStore = new TimelineStore(resolve(directory, "timeline"));
+  const hourStore = new HourStore(resolve(directory, "hours"));
+  const dailyRollupStore = new DailyRollupStore(resolve(directory, "daily-rollups"));
+  const shortEpisode = segmentActivityEvents([start, end])[0]!;
+  const shortTimeline = timelineItem(
+    shortEpisode.id,
+    shortEpisode.events.map(({ id }) => id),
+    "Short fragment"
+  );
+  timelineStore.save(shortTimeline);
+  const revision = timelineRevision(shortTimeline)!;
+  hourStore.save(hourItem(shortTimeline.id, revision));
+  dailyRollupStore.save(dailyRollupItem(shortTimeline.id, revision));
+
+  const result = reconcileProtectedHistory(directory, timelineStore, hourStore, dailyRollupStore);
+
+  assert.deepEqual(result, {
+    rawEventsRemoved: 0,
+    timelineItemsRemoved: 0,
+    hourItemsRemoved: 0,
+    dailyRollupsRemoved: 0
+  });
+  assert.equal(timelineStore.loadAll().length, 1);
+  assert.equal(hourStore.loadAll().length, 1);
+  assert.equal(dailyRollupStore.loadAll().length, 1);
+  assert.match(readFileSync(resolve(directory, "events-2026-08-15.jsonl"), "utf8"), /short-start/);
 });
 
 function browserEvent(

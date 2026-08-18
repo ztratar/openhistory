@@ -7,7 +7,8 @@ import { isItemScopedInferenceError } from "./inference/errors";
 import type { ActivityPrivacyOptions } from "./privacy-policy";
 import { TimelineStore } from "./timeline-store";
 
-const ACTIVE_EPISODE_GRACE_MS = 5 * 60 * 1_000;
+const MIN_EPISODE_WINDOW_MS = 8 * 60 * 1_000;
+const ACTIVE_EPISODE_GRACE_MS = 60 * 1_000;
 const MAX_EPISODES_PER_REQUEST = 8;
 
 export class TimelineCoordinator {
@@ -85,11 +86,12 @@ export class TimelineCoordinator {
       const stored = items.get(episode.id);
       if (stored && sameIds(stored.sourceEventIds, episode.events.map((event) => event.id))) return false;
       const isNotNewest = index < episodes.length - 1;
+      const minimumWindowElapsed = now - Date.parse(episode.startTime) >= MIN_EPISODE_WINDOW_MS;
       const hasGoneQuiet = now - Date.parse(episode.endTime) >= ACTIVE_EPISODE_GRACE_MS;
       const endedAtSleep = ["screen_slept", "session_locked"].includes(
         episode.events.at(-1)?.kind ?? ""
       );
-      return isNotNewest || hasGoneQuiet || endedAtSleep;
+      return minimumWindowElapsed && (isNotNewest || hasGoneQuiet || endedAtSleep);
     });
   }
 

@@ -1,4 +1,4 @@
-export const AUTOMATIC_HISTORY_INTERVAL_MS = 10 * 60 * 1_000;
+export const AUTOMATIC_HISTORY_INTERVAL_MS = 60 * 1_000;
 export const HISTORY_CATCH_UP_DELAY_MS = 15 * 1_000;
 
 export interface PendingHistoryCounts {
