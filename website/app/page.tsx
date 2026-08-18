@@ -49,14 +49,14 @@ export default function Home() {
   return (
     <>
       <header className="top-bar">
-        <a className="top-bar-brand" href="#hero-title" aria-label="OpenHistory home">
+        <a className="top-bar-brand" href="#hero-title" aria-label="OpenHistory home" data-analytics-id="nav_home">
           <Image src="/openhistory-icon.png" width={30} height={30} alt="" aria-hidden="true" priority />
           <span>OpenHistory</span>
         </a>
         <nav className="top-bar-nav" aria-label="Primary navigation">
-          <a href="#privacy">Privacy</a>
-          <a href="#how-it-works">How it works</a>
-          <a className="top-bar-download" href={macDownloadUrl} aria-label="Download OpenHistory for Mac">
+          <a href="#privacy" data-analytics-id="nav_privacy">Privacy</a>
+          <a href="#how-it-works" data-analytics-id="nav_how_it_works">How it works</a>
+          <a className="top-bar-download" href={macDownloadUrl} aria-label="Download OpenHistory for Mac" data-analytics-id="nav_download_mac">
             <span className="top-bar-apple" aria-hidden="true"></span>
             Download for Mac
           </a>
@@ -78,7 +78,7 @@ export default function Home() {
             <span><i className="trust-icon" aria-hidden="true"><SlidersHorizontal /></i> Full control</span>
           </div>
 
-          <a className="download-button" href={macDownloadUrl} aria-label="Download OpenHistory for Mac">
+          <a className="download-button" href={macDownloadUrl} aria-label="Download OpenHistory for Mac" data-analytics-id="hero_download_mac">
             <span className="apple" aria-hidden="true"></span>
             Download for Mac
           </a>
@@ -154,7 +154,7 @@ export default function Home() {
       <section className="final-cta">
         <p>Local-first. Built for macOS.</p>
         <h2>Remember everything.</h2>
-        <a className="download-button dark" href={macDownloadUrl}>
+        <a className="download-button dark" href={macDownloadUrl} data-analytics-id="footer_cta_download_mac">
           <span className="apple" aria-hidden="true"></span>
           Download for Mac
         </a>
@@ -164,7 +164,7 @@ export default function Home() {
         <span className="footer-brand">OpenHistory</span>
         <div className="footer-center">
           <nav className="footer-links" aria-label="Footer">
-            <a href="/privacy">Privacy</a>
+            <a href="/privacy" data-analytics-id="footer_privacy">Privacy</a>
           </nav>
           <XFollowButton className="footer-follow" />
         </div>

@@ -41,6 +41,8 @@ test("server-renders the OpenHistory landing page", async () => {
   assert.match(html, /https:\/\/dl\.todesktop\.com\/260815ukaa3eq\/mac\/installer\/universal/);
   assert.doesNotMatch(html, /github\.com\/ztratar\/openhistory/);
   assert.match(html, /https:\/\/x\.com\/zachtratar/);
+  assert.match(html, /googletagmanager\.com\/gtag\/js\?id=G-WW2YG7LJ13/);
+  assert.match(html, /gtag\('config', 'G-WW2YG7LJ13'\)/);
   assert.doesNotMatch(html, /codex-preview|Building your site|react-loading-skeleton/i);
 });
 
@@ -52,6 +54,25 @@ test("server-renders the public privacy policy", async () => {
   assert.match(html, /Saving an API key alone does not authorize transmission/);
   assert.match(html, /email and messaging activity are selected for inclusion by default/);
   assert.match(html, /Delete all local data/);
+  assert.match(html, /This marketing website uses Google Analytics/);
+});
+
+test("labels every first-party click target for analytics", async () => {
+  const [page, privacyPage, followButton, clickTracking] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/privacy/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/x-follow-button.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/google-analytics.tsx", import.meta.url), "utf8"),
+  ]);
+
+  for (const source of [page, privacyPage, followButton]) {
+    const clickableTags = source.match(/<(?:a|Link)\b[^>]*>/g) ?? [];
+    assert.ok(clickableTags.length > 0);
+    for (const tag of clickableTags) assert.match(tag, /data-analytics-id=/);
+  }
+
+  assert.match(clickTracking, /"event", "site_click"/);
+  assert.match(clickTracking, /page_path: window\.location\.pathname/);
 });
 
 test("ships OpenHistory metadata and social assets", async () => {

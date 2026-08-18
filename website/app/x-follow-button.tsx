@@ -37,6 +37,7 @@ export function XFollowButton({ className = "" }: { className?: string }) {
       <a
         className="twitter-follow-button"
         href="https://x.com/zachtratar"
+        data-analytics-id="follow_zachtratar_x"
         data-size="large"
         data-show-count="false"
         data-show-screen-name="true"

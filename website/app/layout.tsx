@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { GoogleAnalyticsClickTracking } from "./google-analytics";
 import "./globals.css";
+
+const googleAnalyticsId = "G-WW2YG7LJ13";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -49,5 +52,23 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <html lang="en">
+      <head>
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${googleAnalyticsId}');`,
+          }}
+        />
+      </head>
+      <body>
+        {children}
+        <GoogleAnalyticsClickTracking />
+      </body>
+    </html>
+  );
 }
