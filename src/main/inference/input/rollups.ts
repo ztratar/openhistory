@@ -29,16 +29,20 @@ export function hourForHybridModel(timelineItems: TimelineItem[], lastHour?: Hou
 
 export function appleSemanticHourPrompt(timelineItems: TimelineItem[], lastHour?: HourItem): string {
   const prior = lastHour ? `${lastHour.title}: ${singleLine(lastHour.summary)}` : "none";
+  const perEntryBudget = Math.max(180, Math.min(520, Math.floor(5_600 / timelineItems.length)));
   const facts = timelineItems.map((item, index) => {
     const supported = [
       item.decisions.length ? `Supported decisions or requests: ${item.decisions.join("; ")}` : "",
       item.outcomes.length ? `Demonstrated outcomes: ${item.outcomes.join("; ")}` : "",
       item.blockers.length ? `Explicit blockers: ${item.blockers.join("; ")}` : ""
     ].filter(Boolean).join("\n");
-    return `${index + 1}. ${item.title}\n${item.description}${supported ? `\n${supported}` : ""}`;
+    return truncateBrief(
+      `${index + 1}. ${item.title}\n${item.description}${supported ? `\n${supported}` : ""}`,
+      perEntryBudget
+    );
   }).join("\n\n");
   const links = semanticLinkCandidates(timelineItems);
-  return truncateBrief(`Write the current-hour rollup in English. The prior hour is context only and cannot prove current work. Preserve each materially distinct current-hour entry once, merge repetition, and never turn a draft or request into an implemented result.\n\nPrior hour context only:\n${prior}\n\nCurrent-hour factual entries:\n${facts}\n\nImportant link candidates:\n${links}`, 7_500);
+  return truncateBrief(`Write the current-hour rollup in English. There are ${timelineItems.length} factual source entries. The prior hour is context only and cannot prove current work. Group related entries, preserve each materially distinct current-hour workstream once, and never turn a draft or request into an implemented result.\n\nPrior hour context only:\n${prior}\n\nCurrent-hour factual entries:\n${facts}\n\nImportant link candidates:\n${links}`, 7_500);
 }
 
 export function appleSemanticDailyRollupPrompt(
@@ -46,14 +50,15 @@ export function appleSemanticDailyRollupPrompt(
   unrolledTimeline: TimelineItem[],
   existing?: DailyRollupItem
 ): string {
+  const perHourBudget = Math.max(220, Math.min(520, Math.floor(6_000 / Math.max(1, hours.length))));
   const hourLines = hours.map((hour, index) =>
-    truncateBrief(`${index + 1}. ${hour.title}. ${singleLine(hour.summary)}${structuredFacts(hour)}`, 600)
+    truncateBrief(`${index + 1}. ${hour.title}. ${singleLine(hour.summary)}${structuredFacts(hour)}`, perHourBudget)
   );
   const sessionLines = unrolledTimeline.map((item, index) =>
-    truncateBrief(`${index + 1}. ${item.title}. ${item.description}${structuredFacts(item)}`, 500)
+    truncateBrief(`${index + 1}. ${item.title}. ${item.description}${structuredFacts(item)}`, 320)
   );
   const links = semanticLinkCandidates([...hours, ...unrolledTimeline]);
-  return truncateBrief(`Write the day's factual rollup in English. Organize by meaningful workstream, not chronology or applications. Preserve every substantial source once, merge repetition, and never turn drafted requests into completed accomplishments. The prior draft is context only and cannot prove facts.\n\nPrior draft context only:\n${existing ? truncateBrief(`${existing.title}: ${singleLine(existing.summary)}`, 600) : "none"}\n\nCurrent hour rollups:\n${hourLines.join("\n\n") || "none"}\n\nCurrent sessions not represented by an hour:\n${sessionLines.join("\n\n") || "none"}\n\nImportant link candidates:\n${links}`, 8_500);
+  return truncateBrief(`Write the day's factual rollup in English. There are ${hours.length} hour rollups and ${unrolledTimeline.length} additional sessions. Organize by meaningful workstream, not chronology or applications. Preserve every substantial source once, merge repetition, and never turn drafted requests into completed accomplishments. The prior draft is context only and cannot prove facts.\n\nPrior draft context only:\n${existing ? truncateBrief(`${existing.title}: ${singleLine(existing.summary)}`, 500) : "none"}\n\nCurrent hour rollups:\n${hourLines.join("\n\n") || "none"}\n\nCurrent sessions not represented by an hour:\n${sessionLines.join("\n\n") || "none"}\n\nImportant link candidates:\n${links}`, 8_200);
 }
 
 function semanticLinkCandidates(sources: Array<{ links?: HistoryLink[] }>): string {

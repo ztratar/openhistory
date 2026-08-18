@@ -3,6 +3,7 @@ import { HourStore } from "./hour-store";
 import { DailyRollupStore } from "./daily-rollup-store";
 import { InferenceService } from "./openai-service";
 import { inferenceErrorMetadata, publicInferenceErrorMessage } from "./openai-error";
+import { isItemScopedInferenceError } from "./inference/errors";
 import { TimelineStore } from "./timeline-store";
 import { timelineRevision } from "./provenance";
 
@@ -49,16 +50,33 @@ export class DailyRollupCoordinator {
 
     try {
       if (!this.inference.configured) throw new Error(this.inference.unavailableMessage);
+      let itemError: unknown;
       for (const day of this.pendingDays().slice(0, MAX_DAYS_PER_REQUEST)) {
-        this.dailyRollupStore.save(
-          await this.inference.consolidateDailyRollup(
-            day.date,
-            day.timelineItems,
-            day.existing,
-            this.hoursForDay(day.date, day.timelineItems)
-          )
+        try {
+          this.dailyRollupStore.save(
+            await this.inference.consolidateDailyRollup(
+              day.date,
+              day.timelineItems,
+              day.existing,
+              this.hoursForDay(day.date, day.timelineItems)
+            )
+          );
+          onStateChange?.(this.getState());
+        } catch (error) {
+          if (!isItemScopedInferenceError(error)) throw error;
+          itemError = error;
+          console.error("Daily rollup consolidation skipped one day", inferenceErrorMetadata(
+            error,
+            this.inference.provider
+          ));
+        }
+      }
+      if (itemError) {
+        this.lastError = publicInferenceErrorMessage(
+          itemError,
+          "Daily rollup consolidation",
+          this.inference.provider
         );
-        onStateChange?.(this.getState());
       }
     } catch (error) {
       this.lastError = publicInferenceErrorMessage(error, "Daily rollup consolidation", this.inference.provider);

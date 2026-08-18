@@ -51,13 +51,17 @@ export function rollupLinkCandidates(sources: Array<{ links?: HistoryLink[] }>):
 export function selectedRollupLinks(
   summary: string,
   candidates: HistoryLinkCandidate[],
-  references: string[]
+  references: string[],
+  inferExactMatches = false
 ): HistoryLink[] {
   const byReference = new Map(candidates.map((candidate) => [candidate.reference, candidate]));
+  const inferredReferences = inferExactMatches
+    ? candidates.flatMap((candidate) => exactSummaryLabel(summary, candidate.label) ? [candidate.reference] : [])
+    : [];
   const selected: HistoryLink[] = [];
   const seenUrls = new Set<string>();
   const seenLabels = new Set<string>();
-  for (const reference of references) {
+  for (const reference of [...references, ...inferredReferences]) {
     const candidate = byReference.get(reference);
     const labelKey = candidate?.label.toLocaleLowerCase();
     if (!candidate || !labelKey || seenUrls.has(candidate.url) || seenLabels.has(labelKey)) continue;

@@ -35,6 +35,19 @@ test("resolves only model-selected candidates whose exact labels occur in the su
   ), [{ label: "Pull Request #4", url: "https://github.com/example/openhistory/pull/4" }]);
 });
 
+test("infers a safe local candidate when its exact label is present without a model reference", () => {
+  const candidates = rollupLinkCandidates([{ links: [
+    { label: "Pull Request #4", url: "https://github.com/example/openhistory/pull/4" }
+  ] }]);
+
+  assert.deepEqual(selectedRollupLinks(
+    "- Reviewed Pull Request #4 and verified the build.",
+    candidates,
+    [],
+    true
+  ), [{ label: "Pull Request #4", url: "https://github.com/example/openhistory/pull/4" }]);
+});
+
 test("renders selected labels as safe inline segments and Markdown links", () => {
   const links = [{ label: "Pull Request #4", url: "https://github.com/example/openhistory/pull/4" }];
   const summary = "- Updated Pull Request #4 with inline links.";

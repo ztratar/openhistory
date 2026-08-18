@@ -8,6 +8,7 @@ import {
   reducedAppleInput,
   type AppleWorkerResponse
 } from "./inference/providers/apple";
+import { InferenceOutputError } from "./inference/errors";
 
 test("preserves Apple refusal fallback ordering and worker request fields", async () => {
   const calls: object[] = [];
@@ -126,4 +127,57 @@ test("bounds compact hour and day summaries after adding bullet prefixes", () =>
   assert(day.summary.length <= 1_200);
   assert(hour.summary.startsWith("- "));
   assert(hour.summary.length <= 1_000);
+});
+
+test("normalizes Apple rollup link labels to known opaque references", () => {
+  const normalized = normalizeAppleOutput("hour_rollup_compact", {
+    title: "Reviewed a pull request",
+    summary: "- Reviewed Pull Request #42.",
+    linkReferences: ["Pull Request #42", "invented label", "link-2", "link-2"]
+  }, `Important link candidates:
+link-1: “Pull Request #42” (github.com)
+link-2: “Issue #7” (github.com)`) as { linkReferences: string[] };
+
+  assert.deepEqual(normalized.linkReferences, ["link-1", "link-2"]);
+});
+
+test("repairs repeated inline Apple bullet markers", () => {
+  const normalized = normalizeAppleOutput("daily_rollup_compact", {
+    title: "Refined local history",
+    summary: "- - Refined hourly summaries. - Improved daily coverage.\n• Improved daily coverage."
+  }) as { summary: string };
+
+  assert.equal(normalized.summary, "- Refined hourly summaries.\n- Improved daily coverage.");
+});
+
+test("classifies malformed Apple worker JSON as retryable invalid output", async () => {
+  const provider = new AppleFoundationModelProvider(
+    "system-default",
+    "/synthetic/foundation-model-worker",
+    async () => ({ ok: true, output: "not-json" })
+  );
+
+  await assert.rejects(provider.generate({
+    instructions: "Synthetic instructions",
+    input: "Synthetic evidence",
+    schema: z.object({ title: z.string() }),
+    schemaName: "hour_rollup_compact",
+    maxOutputTokens: 650
+  }), (error: unknown) => error instanceof InferenceOutputError && error.kind === "invalid_output");
+});
+
+test("classifies Apple structured decoding failures as retryable invalid output", async () => {
+  const provider = new AppleFoundationModelProvider(
+    "system-default",
+    "/synthetic/foundation-model-worker",
+    async () => ({ ok: false, reason: "decodingFailure: Failed to extract content" })
+  );
+
+  await assert.rejects(provider.generate({
+    instructions: "Synthetic instructions",
+    input: "Synthetic evidence",
+    schema: z.object({ title: z.string() }),
+    schemaName: "hour_rollup_compact",
+    maxOutputTokens: 650
+  }), (error: unknown) => error instanceof InferenceOutputError && error.kind === "invalid_output");
 });
