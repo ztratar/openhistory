@@ -527,6 +527,14 @@ h2 { margin: 0; color: #2a2a2a; font-family: Georgia, serif; font-size: 20px; fo
 .privacy-data-heading span { margin-top: 4px; color: #868686; font-size: 10px; line-height: 1.4; }
 .privacy-data-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .privacy-data-settings > p { margin: 0; color: #838383; font-size: 9px; line-height: 1.5; }
+.quit-settings { display: flex; padding: 15px 16px; align-items: center; justify-content: space-between; gap: 18px; }
+.quit-settings-copy { display: grid; min-width: 0; gap: 4px; }
+.quit-settings-copy strong { color: #3f3f3f; font-size: 12px; }
+.quit-settings-copy span { color: #868686; font-size: 10px; line-height: 1.4; }
+.quit-button { flex: 0 0 auto; min-width: 66px; padding: 5px 14px; color: #363636; background: linear-gradient(rgba(255, 255, 255, .92), rgba(252, 252, 251, .68)); border: 1px solid rgba(60, 60, 60, .24); border-radius: 6px; box-shadow: 0 1px 1.5px rgba(0, 0, 0, .1); cursor: pointer; font-size: 11px; font-weight: 500; }
+.quit-button:hover { background: linear-gradient(#fff, rgba(255, 255, 255, .82)); }
+.quit-button:active { background: rgba(210, 212, 214, .75); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .08); }
+.quit-button:focus-visible { outline: 3px solid rgba(77, 141, 239, .55); outline-offset: 1px; }
 .dialog-backdrop { position: fixed; z-index: 100; display: grid; padding: 18px; place-items: center; inset: 0; background: rgba(20, 20, 20, .42); backdrop-filter: blur(7px); }
 .consent-dialog { display: grid; width: min(420px, 100%); padding: 22px; gap: 12px; box-shadow: 0 22px 70px rgba(0, 0, 0, .2); }
 .consent-dialog h2 { font-size: 18px; line-height: 1.25; }
@@ -709,7 +717,11 @@ h2 { margin: 0; color: #2a2a2a; font-family: Georgia, serif; font-size: 20px; fo
   .dialog-backdrop { background: rgba(0, 0, 0, .5); }
   .appearance-settings span { color: #a0a0a0; }
   .app-location-heading strong, .app-location-options strong { color: #e5e5e5; }
-  .app-location-heading > span, .app-location-options small { color: #a0a0a0; }
+  .app-location-heading > span, .app-location-options small, .quit-settings-copy span { color: #a0a0a0; }
+  .quit-settings-copy strong { color: #e5e5e5; }
+  .quit-button { color: #ececec; background: linear-gradient(rgba(255, 255, 255, .18), rgba(255, 255, 255, .1)); border-color: rgba(238, 238, 238, .2); box-shadow: 0 1px 1.5px rgba(0, 0, 0, .3); }
+  .quit-button:hover { background: linear-gradient(rgba(255, 255, 255, .24), rgba(255, 255, 255, .15)); }
+  .quit-button:active { background: rgba(255, 255, 255, .08); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .3); }
   .app-location-options button { color: #aaa; background: rgba(255, 255, 255, .04); border-color: rgba(238, 238, 238, .1); }
   .app-location-options button:hover { color: #c7ddf5; background: rgba(255, 255, 255, .07); border-color: rgba(139, 184, 237, .24); }
   .app-location-options button.active { color: #8bb8ed; background: rgba(109, 166, 232, .1); border-color: rgba(139, 184, 237, .3); }

@@ -651,6 +651,7 @@ async function initialize(): Promise<void> {
   await agentMcp.start();
 
   handleTrustedIpc(IPC_CHANNELS.getBootstrap, () => bootstrapState());
+  handleTrustedIpc(IPC_CHANNELS.quitApp, () => app.quit());
   handleTrustedIpc(IPC_CHANNELS.refreshAppleAvailability, () => {
     appleAvailability = publicAppleAvailability(probeAppleFoundationModel());
     if (inferenceSettings.provider === "apple") {
