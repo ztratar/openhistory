@@ -33,6 +33,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 const pages = ["History", "Chat", "Settings"] as const;
 type Page = (typeof pages)[number];
 type SetAppState = React.Dispatch<React.SetStateAction<BootstrapState | undefined>>;
+type ChatSessionState = {
+  turns: HistoryChatTurn[];
+  draft: string;
+  sending: boolean;
+  error?: string;
+};
+type SetChatSessionState = React.Dispatch<React.SetStateAction<ChatSessionState>>;
 const PAGE_STORAGE_KEY = "openhistory:page";
 const APPLICATION_PREVIEW_LIMIT = 5;
 const pageLabels: Record<Page, string> = {
@@ -50,6 +57,11 @@ export function App(): React.JSX.Element {
   const [apiKeyFocusRequest, setApiKeyFocusRequest] = useState(0);
   const [startupError, setStartupError] = useState<string>();
   const [liveActivityOpen, setLiveActivityOpen] = useState(false);
+  const [chatSession, setChatSession] = useState<ChatSessionState>({
+    turns: [],
+    draft: "",
+    sending: false
+  });
 
   function selectPage(nextPage: Page): void {
     sessionStorage.setItem(PAGE_STORAGE_KEY, nextPage);
@@ -214,7 +226,12 @@ export function App(): React.JSX.Element {
                 setState={setState}
               />
             ) : page === "Chat" ? (
-              <ChatPage onOpenSettings={() => selectPage("Settings")} state={state} />
+              <ChatPage
+                onOpenSettings={() => selectPage("Settings")}
+                session={chatSession}
+                setSession={setChatSession}
+                state={state}
+              />
             ) : null}
             {!liveActivityOpen && page === "Settings" ? (
               <SettingsPage
@@ -240,15 +257,16 @@ const CHAT_STARTERS = [
 
 function ChatPage({
   state,
-  onOpenSettings
+  onOpenSettings,
+  session,
+  setSession
 }: {
   state: BootstrapState;
   onOpenSettings: () => void;
+  session: ChatSessionState;
+  setSession: SetChatSessionState;
 }): React.JSX.Element {
-  const [turns, setTurns] = useState<HistoryChatTurn[]>([]);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string>();
+  const { turns, draft, sending, error } = session;
   const threadRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const configured = state.inference.configured && state.inference.settings.provider !== "apple";
@@ -263,17 +281,20 @@ function ChatPage({
     if (!message || sending || !configured) return;
     stickToBottomRef.current = true;
     const nextTurns: HistoryChatTurn[] = [...turns, { role: "user", content: message }];
-    setTurns(nextTurns);
-    setDraft("");
-    setError(undefined);
-    setSending(true);
+    setSession({ turns: nextTurns, draft: "", sending: true });
     try {
       const response = await window.openHistory.historyChat(nextTurns);
-      setTurns((current) => [...current, { role: "assistant", content: response.answer }]);
+      setSession((current) => ({
+        ...current,
+        turns: [...current.turns, { role: "assistant", content: response.answer }]
+      }));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Chat couldn't answer that right now.");
+      setSession((current) => ({
+        ...current,
+        error: caught instanceof Error ? caught.message : "Chat couldn't answer that right now."
+      }));
     } finally {
-      setSending(false);
+      setSession((current) => ({ ...current, sending: false }));
     }
   }
 
@@ -281,10 +302,9 @@ function ChatPage({
     <section className={`chat-page${turns.length > 0 ? " has-turns" : ""}`} aria-label="Chat">
       {turns.length > 0 ? (
         <div className="chat-session-actions">
-          <button className="chat-clear" onClick={() => {
+          <button className="chat-clear" disabled={sending} onClick={() => {
             stickToBottomRef.current = true;
-            setTurns([]);
-            setError(undefined);
+            setSession({ turns: [], draft: "", sending: false });
           }} type="button">
             <svg aria-hidden="true" viewBox="0 0 16 16">
               <path d="M3.2 6.2A5 5 0 1 1 3.8 11" />
@@ -346,7 +366,7 @@ function ChatPage({
           aria-label="Message OpenHistory"
           autoFocus
           disabled={!configured || sending}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => setSession((current) => ({ ...current, draft: event.target.value }))}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
