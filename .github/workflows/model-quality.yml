@@ -35,11 +35,10 @@ jobs:
       - run: npm run test:inference-preservation
       - name: Run non-destructive Apple shadow evaluation
         run: npm run benchmark:apple-model -- "$OPENHISTORY_EVAL_DATA_DIR" reports/apple-foundation-model-quality-latest.md 40 8 20 --cloud-judge
-      - uses: actions/upload-artifact@v6
+      - name: Upload aggregate model-quality metrics
+        uses: actions/upload-artifact@v6
         with:
-          name: apple-model-quality-report
-          path: |
-            reports/apple-foundation-model-quality-latest.md
-            reports/apple-foundation-model-quality-latest-metrics.json
+          name: apple-model-quality-metrics
+          path: reports/apple-foundation-model-quality-latest-metrics.json
           if-no-files-found: error
           retention-days: 30
