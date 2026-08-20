@@ -2242,6 +2242,20 @@ function SettingsPage({
         <p>Diagnostics contain versions, status, settings, and counts only—never activity text, file paths, API keys, or agent credentials. Deletion requires a second native confirmation and restarts the app.</p>
         {dataMessage ? <span className="api-key-message" role="status">{dataMessage}</span> : null}
       </div>
+      <div className="card quit-settings">
+        <div className="quit-settings-copy">
+          <strong>Quit OpenHistory</strong>
+          <span id="quit-detail">Stops activity capture until you reopen the app. Closing the window keeps capture running.</span>
+        </div>
+        <button
+          aria-describedby="quit-detail"
+          className="quit-button"
+          onClick={() => void window.openHistory.quitApp()}
+          type="button"
+        >
+          Quit
+        </button>
+      </div>
       {pendingCloudSettings && isCloudInferenceProvider(pendingCloudSettings.provider) ? (
         <CloudInferenceDialog
           busy={savingApiKey}

@@ -29,6 +29,7 @@ export const IPC_CHANNELS = {
   revealDataDirectory: "openhistory:reveal-data-directory",
   deleteAllData: "openhistory:delete-all-data",
   exportDiagnostics: "openhistory:export-diagnostics",
+  quitApp: "openhistory:quit-app",
   buildHistory: "openhistory:build-history",
   copyAgentSetup: "openhistory:copy-agent-setup",
   revokeAgentConnection: "openhistory:revoke-agent-connection",
@@ -300,6 +301,7 @@ export interface OpenHistoryBridge {
   revealDataDirectory(): Promise<void>;
   deleteAllData(): Promise<boolean>;
   exportDiagnostics(): Promise<boolean>;
+  quitApp(): Promise<void>;
   buildHistory(): Promise<BootstrapState>;
   copyAgentSetup(): Promise<AgentAccessState>;
   revokeAgentConnection(id: string): Promise<AgentAccessState>;

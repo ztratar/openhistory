@@ -35,6 +35,7 @@ const bridge: OpenHistoryBridge = {
   revealDataDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.revealDataDirectory),
   deleteAllData: () => ipcRenderer.invoke(IPC_CHANNELS.deleteAllData),
   exportDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.exportDiagnostics),
+  quitApp: () => ipcRenderer.invoke(IPC_CHANNELS.quitApp),
   buildHistory: () => ipcRenderer.invoke(IPC_CHANNELS.buildHistory),
   copyAgentSetup: () => ipcRenderer.invoke(IPC_CHANNELS.copyAgentSetup),
   revokeAgentConnection: (id) => ipcRenderer.invoke(IPC_CHANNELS.revokeAgentConnection, id),
