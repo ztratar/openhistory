@@ -137,6 +137,28 @@ test("can disable inference and switch direct providers without exposing credent
   assert.equal(service.model, "claude-sonnet-5");
 });
 
+test("configures Codex inference only after the isolated ChatGPT account is connected", () => {
+  const settings = {
+    version: 1 as const,
+    enabled: true,
+    provider: "openai" as const,
+    openAIAuthMode: "chatgpt" as const,
+    models: { apple: "system-default", openai: "gpt-5.6-luna", anthropic: "claude-sonnet-5", kimi: "kimi-k3" }
+  };
+  const runtime = {
+    codexHome: "/private/openhistory/codex",
+    executablePath: "/synthetic/codex",
+    workingDirectory: "/private/openhistory/codex/workspace"
+  };
+  const service = new InferenceService({ settings, codexRuntime: runtime, chatGPTSignedIn: false });
+  assert.equal(service.configured, false);
+  assert.match(service.unavailableMessage, /ChatGPT is not connected/);
+
+  service.configure(settings, undefined, { codexRuntime: runtime, signedIn: true });
+  assert.equal(service.configured, true);
+  assert.equal(service.provider, "openai");
+});
+
 test("retries malformed structured output once with a larger output budget", async () => {
   const budgets: number[] = [];
   const adapter = {

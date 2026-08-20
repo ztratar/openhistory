@@ -1,5 +1,10 @@
 import type { ActivityEpisode, HourItem, DailyRollupItem, TimelineItem } from "@shared/contracts";
-import type { InferenceProvider, InferenceSettings } from "@shared/inference";
+import {
+  selectedOpenAIAuthMode,
+  type InferenceProvider,
+  type InferenceSettings
+} from "@shared/inference";
+import type { CodexRuntime } from "../codex-runtime";
 import { isRetryableInferenceError } from "./errors";
 import { timelineRevision } from "../provenance";
 import {
@@ -61,11 +66,16 @@ export class InferenceService {
 
   constructor(options: {
     apiKey?: string;
+    chatGPTSignedIn?: boolean;
+    codexRuntime?: CodexRuntime;
     settings: InferenceSettings;
     adapter?: InferenceProviderAdapter;
   }) {
     this.settings = options.settings;
-    this.configure(options.settings, options.apiKey);
+    this.configure(options.settings, options.apiKey, {
+      codexRuntime: options.codexRuntime,
+      signedIn: options.chatGPTSignedIn === true
+    });
     if (options.settings.enabled && options.adapter) this.adapter = options.adapter;
   }
 
@@ -89,12 +99,20 @@ export class InferenceService {
     if (this.settings.enabled && this.settings.provider === "apple") {
       return probeAppleFoundationModel().reason ?? "Apple's on-device model is unavailable.";
     }
+    if (this.settings.enabled && this.settings.provider === "openai" &&
+        selectedOpenAIAuthMode(this.settings) === "chatgpt") {
+      return "ChatGPT is not connected. Sign in from Settings.";
+    }
     return this.settings.enabled
       ? "No inference API key is configured. Add one in Settings."
       : "Automatic summaries are turned off in Settings.";
   }
 
-  configure(settings: InferenceSettings, apiKey?: string): void {
+  configure(
+    settings: InferenceSettings,
+    apiKey?: string,
+    chatGPT?: { codexRuntime?: CodexRuntime; signedIn: boolean }
+  ): void {
     this.settings = structuredClone(settings);
     if (!settings.enabled) {
       this.adapter = undefined;
@@ -107,8 +125,24 @@ export class InferenceService {
         : undefined;
       return;
     }
+    if (settings.provider === "openai" && selectedOpenAIAuthMode(settings) === "chatgpt") {
+      this.adapter = chatGPT?.signedIn && chatGPT.codexRuntime
+        ? createInferenceProvider({
+          provider: "openai",
+          model: settings.models.openai,
+          settings,
+          codexRuntime: chatGPT.codexRuntime
+        })
+        : undefined;
+      return;
+    }
     this.adapter = apiKey
-      ? createInferenceProvider({ apiKey, provider: settings.provider, model: settings.models[settings.provider] })
+      ? createInferenceProvider({
+        apiKey,
+        provider: settings.provider,
+        model: settings.models[settings.provider],
+        settings
+      })
       : undefined;
   }
 

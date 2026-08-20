@@ -10,11 +10,13 @@ import { z } from "zod";
 import { writePrivateFile } from "./private-storage";
 
 const InferenceProviderSchema = z.enum(INFERENCE_PROVIDERS);
+const OpenAIAuthModeSchema = z.enum(["apiKey", "chatgpt"]);
 const ModelSchema = z.string().trim().min(1).max(200);
 const InferenceSettingsSchema = z.object({
   version: z.literal(1),
   enabled: z.boolean(),
   provider: InferenceProviderSchema,
+  openAIAuthMode: OpenAIAuthModeSchema.default("apiKey"),
   models: z.object({
     apple: ModelSchema.default(DEFAULT_INFERENCE_MODELS.apple),
     openai: ModelSchema,
@@ -33,6 +35,7 @@ export class InferenceSettingsStore {
       version: 1,
       enabled: true,
       provider: "openai",
+      openAIAuthMode: "apiKey",
       models: {
         ...DEFAULT_INFERENCE_MODELS,
         ...normalizedModelDefaults(modelDefaults)

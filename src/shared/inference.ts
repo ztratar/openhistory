@@ -4,19 +4,35 @@ export const CLOUD_INFERENCE_PROVIDERS = ["openai", "anthropic", "kimi"] as cons
 export type InferenceProvider = (typeof INFERENCE_PROVIDERS)[number];
 export type CloudInferenceProvider = (typeof CLOUD_INFERENCE_PROVIDERS)[number];
 export type ApiKeySource = "saved" | "environment" | "none";
+export type OpenAIAuthMode = "apiKey" | "chatgpt";
+export type CodexAccountStatus = "starting" | "signedOut" | "signingIn" | "signedIn" | "unavailable";
+
+export interface CodexAccountState {
+  status: CodexAccountStatus;
+  email?: string;
+  planType?: string;
+  lastError?: string;
+}
 
 export interface InferenceSettings {
   version: 1;
   enabled: boolean;
   provider: InferenceProvider;
   models: Record<InferenceProvider, string>;
+  /** Defaults to apiKey when absent in settings written before ChatGPT sign-in support. */
+  openAIAuthMode?: OpenAIAuthMode;
 }
 
 export interface InferenceState {
   settings: InferenceSettings;
   configured: boolean;
   appleAvailability: AppleInferenceAvailability;
+  codexAccount: CodexAccountState;
   keySources: Record<InferenceProvider, ApiKeySource>;
+}
+
+export function selectedOpenAIAuthMode(settings: InferenceSettings): OpenAIAuthMode {
+  return settings.openAIAuthMode ?? "apiKey";
 }
 
 export interface AppleInferenceAvailability {

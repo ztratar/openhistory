@@ -19,6 +19,9 @@ export const IPC_CHANNELS = {
   updateInferenceSettings: "openhistory:update-inference-settings",
   setInferenceApiKey: "openhistory:set-inference-api-key",
   clearInferenceApiKey: "openhistory:clear-inference-api-key",
+  signInWithChatGPT: "openhistory:sign-in-with-chatgpt",
+  cancelChatGPTSignIn: "openhistory:cancel-chatgpt-sign-in",
+  signOutOfChatGPT: "openhistory:sign-out-of-chatgpt",
   acceptPrivacyNotice: "openhistory:accept-privacy-notice",
   completeInferenceOnboarding: "openhistory:complete-inference-onboarding",
   refreshAppleAvailability: "openhistory:refresh-apple-availability",
@@ -291,6 +294,9 @@ export interface OpenHistoryBridge {
   updateInferenceSettings(settings: InferenceSettings): Promise<BootstrapState>;
   setInferenceApiKey(provider: InferenceProvider, apiKey: string): Promise<BootstrapState>;
   clearInferenceApiKey(provider: InferenceProvider): Promise<BootstrapState>;
+  signInWithChatGPT(): Promise<BootstrapState>;
+  cancelChatGPTSignIn(): Promise<BootstrapState>;
+  signOutOfChatGPT(): Promise<BootstrapState>;
   acceptPrivacyNotice(): Promise<BootstrapState>;
   completeInferenceOnboarding(selection: InferenceOnboardingSelection): Promise<BootstrapState>;
   refreshAppleAvailability(): Promise<BootstrapState>;
@@ -322,6 +328,7 @@ export interface InferenceOnboardingSelection {
   provider: InferenceProvider;
   model: string;
   apiKey?: string;
+  openAIAuthMode?: "apiKey" | "chatgpt";
   captureEmailActivity?: boolean;
   captureMessagingActivity?: boolean;
   appPresentationMode?: AppPresentationMode;

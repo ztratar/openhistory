@@ -1,5 +1,9 @@
 import type { CollectionSettings } from "@shared/contracts";
-import { isCloudInferenceProvider, type InferenceSettings } from "@shared/inference";
+import {
+  isCloudInferenceProvider,
+  selectedOpenAIAuthMode,
+  type InferenceSettings
+} from "@shared/inference";
 
 export function cloudInferenceNeedsConsent(
   inference: InferenceSettings,
@@ -10,11 +14,13 @@ export function cloudInferenceNeedsConsent(
     !collection.cloudInferenceConsents.includes(inference.provider);
 }
 
-export function cloudInferenceNeedsApiKey(
+export function cloudInferenceNeedsCredential(
   inference: InferenceSettings,
-  apiKey: string | undefined
+  credentials: { apiKey?: string; chatGPTSignedIn?: boolean }
 ): boolean {
-  return inference.enabled &&
-    isCloudInferenceProvider(inference.provider) &&
-    !apiKey?.trim();
+  if (!inference.enabled || !isCloudInferenceProvider(inference.provider)) return false;
+  if (inference.provider === "openai" && selectedOpenAIAuthMode(inference) === "chatgpt") {
+    return credentials.chatGPTSignedIn !== true;
+  }
+  return !credentials.apiKey?.trim();
 }

@@ -22,6 +22,9 @@ const bridge: OpenHistoryBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.setInferenceApiKey, provider, apiKey),
   clearInferenceApiKey: (provider) =>
     ipcRenderer.invoke(IPC_CHANNELS.clearInferenceApiKey, provider),
+  signInWithChatGPT: () => ipcRenderer.invoke(IPC_CHANNELS.signInWithChatGPT),
+  cancelChatGPTSignIn: () => ipcRenderer.invoke(IPC_CHANNELS.cancelChatGPTSignIn),
+  signOutOfChatGPT: () => ipcRenderer.invoke(IPC_CHANNELS.signOutOfChatGPT),
   acceptPrivacyNotice: () => ipcRenderer.invoke(IPC_CHANNELS.acceptPrivacyNotice),
   completeInferenceOnboarding: (selection) =>
     ipcRenderer.invoke(IPC_CHANNELS.completeInferenceOnboarding, selection),

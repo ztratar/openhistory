@@ -3,7 +3,7 @@ import type { InferenceSettings } from "@shared/inference";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_COLLECTION_SETTINGS } from "./settings-store";
-import { cloudInferenceNeedsApiKey, cloudInferenceNeedsConsent } from "./privacy-consent";
+import { cloudInferenceNeedsCredential, cloudInferenceNeedsConsent } from "./privacy-consent";
 
 const cloud: InferenceSettings = {
   version: 1,
@@ -30,9 +30,16 @@ test("accepts only consent for the selected cloud provider", () => {
 });
 
 test("requires a provider-specific API key before enabling cloud inference", () => {
-  assert.equal(cloudInferenceNeedsApiKey(cloud, undefined), true);
-  assert.equal(cloudInferenceNeedsApiKey(cloud, "  "), true);
-  assert.equal(cloudInferenceNeedsApiKey(cloud, "anthropic-key"), false);
-  assert.equal(cloudInferenceNeedsApiKey({ ...cloud, enabled: false }, undefined), false);
-  assert.equal(cloudInferenceNeedsApiKey({ ...cloud, provider: "apple" }, undefined), false);
+  assert.equal(cloudInferenceNeedsCredential(cloud, {}), true);
+  assert.equal(cloudInferenceNeedsCredential(cloud, { apiKey: "  " }), true);
+  assert.equal(cloudInferenceNeedsCredential(cloud, { apiKey: "anthropic-key" }), false);
+  assert.equal(cloudInferenceNeedsCredential({ ...cloud, enabled: false }, {}), false);
+  assert.equal(cloudInferenceNeedsCredential({ ...cloud, provider: "apple" }, {}), false);
+});
+
+test("accepts an isolated ChatGPT account instead of an OpenAI API key", () => {
+  const chatgpt = { ...cloud, openAIAuthMode: "chatgpt" as const };
+  assert.equal(cloudInferenceNeedsCredential(chatgpt, {}), true);
+  assert.equal(cloudInferenceNeedsCredential(chatgpt, { chatGPTSignedIn: false }), true);
+  assert.equal(cloudInferenceNeedsCredential(chatgpt, { chatGPTSignedIn: true }), false);
 });

@@ -57,7 +57,7 @@ OpenHistory leaves you with a useful memory of the day without taking screenshot
 | **What it records** | Foreground application activity and permitted accessibility changes needed to create work summaries. |
 | **What it never records** | Screenshots, audio, or individual key events. Password fields, private browser windows, and protected apps and websites are excluded. |
 | **Where data lives** | Raw activity, summaries, settings, and agent credentials stay in a permission-restricted local data directory. |
-| **When cloud models receive data** | Only after you choose a cloud provider, supply its key, and accept the provider-specific transmission disclosure. |
+| **When cloud models receive data** | Only after you choose a cloud provider, configure its credential or ChatGPT sign-in, and accept the provider-specific transmission disclosure. |
 | **What agents can see** | A redacted projection—not the raw activity log—served over loopback with bearer authentication. |
 
 Collection can be paused at any time. **Settings → Data & privacy → Delete all local data** removes recorded activity, summaries, settings, saved keys, and agent connections.
@@ -92,10 +92,11 @@ npm run dev
 On first launch, OpenHistory keeps collection paused until you accept the privacy notice. You will then choose how summaries should work:
 
 - **Apple On-Device** keeps evidence on the Mac and requires no API key.
-- **A cloud provider** requires its own API key and an explicit transmission disclosure.
+- **OpenAI** can use an isolated ChatGPT/Codex sign-in or an OpenAI API key, plus an explicit transmission disclosure.
+- **Anthropic or Kimi** requires its own API key and an explicit transmission disclosure.
 - **Summaries off** keeps local collection running without model-generated timeline entries.
 
-Keys entered in Settings are encrypted separately for each provider using macOS-backed Electron secure storage. They are never returned to the renderer, collector, or MCP clients.
+Keys entered in Settings are encrypted separately for each provider using macOS-backed Electron secure storage. ChatGPT credentials are managed by the bundled Codex runtime under OpenHistory's private data directory, isolated from the user's normal Codex CLI configuration. Neither credential type is returned to the renderer, collector, or MCP clients.
 
 <details>
 <summary>Using environment variables instead of Settings</summary>
@@ -144,9 +145,9 @@ Inference inputs, prompts, schemas, limits, providers, and the native worker pro
 ## Privacy model
 
 - Collection can be paused at any time.
-- When automatic summaries are enabled and the selected provider has an API key, completed episode evidence is sent directly to that provider about every 10 minutes.
+- When automatic summaries are enabled and the selected provider has a configured API key or isolated ChatGPT account, completed episode evidence is sent directly to that provider about every 10 minutes.
 - Chat requests send the conversation and relevant retrieved evidence to the configured cloud provider; questions about very recent work can include privacy-filtered activity not yet covered by a timeline summary.
-- OpenAI requests use `store: false`; Anthropic and Kimi requests are governed by their respective API data policies.
+- OpenAI API-key requests use `store: false`. ChatGPT-backed OpenAI requests run through the official Codex SDK with tools and web search disabled, a read-only empty workspace, and CLI input history disabled. Any Codex-owned session bookkeeping stays inside the isolated OpenHistory data directory and is removed by **Delete all local data**. Anthropic and Kimi requests are governed by their respective API data policies.
 - Credentials and credential-shaped text are redacted before persistence or projection.
 - Raw activity is excluded from the MCP projection.
 - Agent credentials are random, independently revocable, and stored only as SHA-256 hashes.
@@ -160,7 +161,7 @@ npm run privacy:scrub-protected -- "/path/to/activity-data"
 
 Raw JSONL remains the source of truth. Timeline items reference their exact source event IDs, while hourly and daily rollups independently reference revisions of verified timeline items. Stale derived data is not shown or sent back to the model. Existing version-1 data in `memory/` is imported into `daily-rollups/` on first launch after upgrading.
 
-Use **Settings > Data & privacy > Delete all local data** to remove raw activity, summaries, settings, saved keys, and agent connections. OpenHistory confirms the action natively and restarts. For a full uninstall, delete local data first, remove the app, then remove its Accessibility permission in System Settings.
+Use **Settings > Data & privacy > Delete all local data** to remove raw activity, summaries, settings, saved keys, the isolated ChatGPT sign-in, and agent connections. OpenHistory confirms the action natively and restarts. For a full uninstall, delete local data first, remove the app, then remove its Accessibility permission in System Settings.
 
 ## Local agent access
 
@@ -206,7 +207,9 @@ Build a complete runnable application locally without ToDesktop credentials or a
 npm run desktop:package:local
 ```
 
-The verified, ad-hoc-signed application is written under `.todesktop/local/`. It contains only compiled application output, production dependencies, the public icon, the in-process collector bridge, and the Foundation Models worker.
+The verified, ad-hoc-signed application is written under `.todesktop/local/`. It contains only compiled application output, production dependencies, the public icon, the in-process collector bridge, the Foundation Models worker, and the platform-specific Codex runtime used for ChatGPT-backed inference.
+
+If the checkout is inside an iCloud or File Provider-backed folder, set `OPENHISTORY_LOCAL_PACKAGE_OUTPUT` to a temporary local directory. File Provider can reattach Finder metadata to nested `.app` bundles while they are being signed, which macOS correctly rejects.
 
 Useful references:
 

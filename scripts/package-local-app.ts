@@ -7,8 +7,8 @@ import {
 import { packager } from "@electron/packager";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { arch as hostArchitecture } from "node:os";
-import { resolve } from "node:path";
+import { arch as hostArchitecture, homedir, tmpdir } from "node:os";
+import { parse, resolve } from "node:path";
 import { readFileSync, statSync } from "node:fs";
 
 const root = resolve(import.meta.dirname, "..");
@@ -20,7 +20,7 @@ if (process.platform !== "darwin" || (architecture !== "arm64" && architecture !
 const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as {
   version: string;
 };
-const outputRoot = resolve(root, ".todesktop", "local");
+const outputRoot = localPackageOutputRoot(process.env.OPENHISTORY_LOCAL_PACKAGE_OUTPUT);
 const applicationPaths = await packager({
   dir: root,
   name: "OpenHistory",
@@ -28,7 +28,10 @@ const applicationPaths = await packager({
   arch: architecture,
   out: outputRoot,
   overwrite: true,
-  asar: true,
+  asar: {
+    unpack: "**/{.**,**}/**/*.node",
+    unpackDir: "node_modules/@openai/codex-*/vendor/**"
+  },
   prune: true,
   appBundleId: "io.github.ztratar.openhistory",
   appCategoryType: "public.app-category.productivity",
@@ -57,6 +60,7 @@ await afterPack({
 });
 
 const mainExecutable = resolve(application, "Contents", "MacOS", "OpenHistory");
+clearUnsupportedSigningMetadata(application);
 await flipFuses(mainExecutable, {
   version: FuseVersion.V1,
   resetAdHocDarwinSignature: true,
@@ -83,12 +87,27 @@ for (const component of nativeComponents) {
     stdio: "inherit"
   });
 }
+clearUnsupportedSigningMetadata(application);
 execFileSync("codesign", ["--force", "--deep", "--sign", "-", "--timestamp=none", application], {
   stdio: "inherit"
 });
 
 verifyApplication(application);
 process.stdout.write(`Local application ready: ${application}\n`);
+
+function localPackageOutputRoot(override: string | undefined): string {
+  if (!override) return resolve(root, ".todesktop", "local");
+  const candidate = resolve(override);
+  const forbidden = new Set([parse(candidate).root, homedir(), tmpdir(), root]);
+  if (forbidden.has(candidate)) {
+    throw new Error("OPENHISTORY_LOCAL_PACKAGE_OUTPUT must be a dedicated subdirectory");
+  }
+  return candidate;
+}
+
+function clearUnsupportedSigningMetadata(applicationPath: string): void {
+  execFileSync("xattr", ["-cr", applicationPath], { stdio: "inherit" });
+}
 
 function ignoreOutsideRuntimeAllowlist(candidate: string): boolean {
   const path = candidate.replaceAll("\\", "/");

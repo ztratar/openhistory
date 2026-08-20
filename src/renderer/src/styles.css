@@ -196,6 +196,24 @@ h2 { margin: 0; color: #2a2a2a; font-family: Georgia, serif; font-size: 20px; fo
 .onboarding-key-field { display: grid; gap: 6px; color: #5d5d5d; font-size: 10px; font-weight: 650; }
 .onboarding-key-field input { width: 100%; padding: 10px 11px; color: #333; background: rgba(255, 255, 255, .5); border: 1px solid #d7d5cf; border-radius: 8px; outline: 0; }
 .onboarding-key-field input:focus { border-color: #5b8def; box-shadow: 0 0 0 2px rgba(91, 141, 239, .15); }
+.onboarding-api-key-auth { display: grid; gap: 7px; }
+.onboarding-chatgpt-auth { display: grid; padding: 11px 12px; gap: 10px; background: rgba(255, 255, 255, .28); border: 1px solid rgba(82, 82, 82, .13); border-radius: 10px; }
+.onboarding-chatgpt-auth > p { margin: 0; color: #858585; font-size: 9px; line-height: 1.45; }
+.chatgpt-auth-heading { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.chatgpt-auth-heading > span:last-child { display: grid; min-width: 0; gap: 2px; }
+.chatgpt-auth-heading strong { color: #404040; font-size: 11px; }
+.chatgpt-auth-heading small { color: #858585; font-size: 9px; }
+.chatgpt-auth-mark { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; color: #303030; background: rgba(31, 31, 31, .06); border: 1px solid rgba(31, 31, 31, .07); border-radius: 9px; font-size: 13px; font-weight: 800; }
+.chatgpt-auth-mark.signedIn { color: #466b58; background: rgba(70, 151, 112, .1); border-color: rgba(70, 151, 112, .16); }
+.chatgpt-auth-mark svg { width: 17px; height: 17px; fill: currentColor; }
+.chatgpt-auth-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.chatgpt-waiting { display: inline-flex; align-items: center; gap: 6px; color: #6d747d; font-size: 9px; }
+.chatgpt-waiting i { width: 11px; height: 11px; border: 1.5px solid rgba(79, 127, 181, .25); border-top-color: #4f7fb5; border-radius: 50%; animation: chatgpt-spin .8s linear infinite; }
+@keyframes chatgpt-spin { to { transform: rotate(360deg); } }
+.text-button { padding: 6px 2px; color: #4f7fb5; background: transparent; border: 0; font-size: 9px; font-weight: 700; }
+.text-button:hover { color: #315d89; }
+.text-button:disabled { opacity: .5; cursor: not-allowed; }
+.text-button.align-left { justify-self: start; }
 .onboarding-cloud-disclosure, .onboarding-local-disclosure { padding: 11px 12px; border-radius: 9px; }
 .onboarding-cloud-disclosure { color: #684f42; background: rgba(191, 132, 87, .09); border: 1px solid rgba(164, 104, 65, .18); }
 .onboarding-local-disclosure { color: #406653; background: rgba(70, 151, 112, .08); border: 1px solid rgba(70, 151, 112, .18); }
@@ -511,6 +529,12 @@ h2 { margin: 0; color: #2a2a2a; font-family: Georgia, serif; font-size: 20px; fo
 .api-key-form input { min-width: 0; padding: 9px 11px; color: #333; background: #f7f6f2; border: 1px solid #d8d6d0; border-radius: 8px; outline: 0; font-size: 11px; }
 .api-key-form input:focus { border-color: #5b8def; box-shadow: 0 0 0 2px rgba(91, 141, 239, .15); }
 .api-key-settings > p { margin: 0; color: #838383; font-size: 9px; line-height: 1.5; }
+.chatgpt-account-settings { display: grid; padding: 17px 18px; gap: 12px; }
+.chatgpt-account-settings > p { margin: 0; color: #777; font-size: 9.5px; line-height: 1.5; }
+.chatgpt-account-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.chatgpt-plan-badge { padding: 4px 7px; color: #3d7157; background: rgba(70, 151, 112, .11); border-radius: 999px; font-size: 8px; font-weight: 750; }
+.chatgpt-privacy-note { display: grid; grid-template-columns: auto minmax(0, 1fr); padding-top: 10px; align-items: start; gap: 8px; color: #6d786f; border-top: 1px solid #e7e5df; font-size: 8.5px; line-height: 1.45; }
+.chatgpt-privacy-note svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.3; }
 .settings-apple-availability { padding: 11px 12px; color: #8a512f; background: rgba(191, 111, 64, .09); border: 1px solid rgba(164, 89, 48, .2); border-radius: 9px; }
 .settings-apple-availability strong { font-size: 10.5px; }
 .settings-apple-availability p { margin: 4px 0 0; color: inherit; font-size: 9.5px; line-height: 1.5; }
@@ -685,6 +709,14 @@ h2 { margin: 0; color: #2a2a2a; font-family: Georgia, serif; font-size: 20px; fo
   .model-sheet-handle { background: rgba(230, 230, 230, .24); }
   .onboarding-key-field { color: #c7c7c7; }
   .onboarding-key-field input { color: #eee; background: rgba(17, 17, 17, .42); border-color: rgba(238, 238, 238, .14); }
+  .onboarding-chatgpt-auth { background: rgba(255, 255, 255, .04); border-color: rgba(238, 238, 238, .11); }
+  .onboarding-chatgpt-auth > p, .chatgpt-auth-heading small, .chatgpt-account-settings > p { color: #9e9e9e; }
+  .chatgpt-auth-heading strong { color: #e5e5e5; }
+  .chatgpt-auth-mark { color: #e7e7e7; background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .09); }
+  .chatgpt-auth-mark.signedIn { color: #9bd1b7; background: rgba(82, 161, 123, .16); border-color: rgba(126, 190, 158, .2); }
+  .chatgpt-waiting { color: #a6b0bb; }
+  .chatgpt-plan-badge { color: #9bd1b7; background: rgba(82, 161, 123, .16); }
+  .chatgpt-privacy-note { color: #a4b4a8; border-color: rgba(238, 238, 238, .1); }
   .onboarding-cloud-disclosure { color: #ddbaa5; background: rgba(165, 105, 65, .13); border-color: rgba(214, 151, 111, .2); }
   .onboarding-local-disclosure { color: #aad3bd; background: rgba(70, 151, 112, .11); border-color: rgba(126, 190, 158, .2); }
   .onboarding-local-disclosure.unavailable { color: #e5b08f; background: rgba(165, 90, 51, .14); border-color: rgba(218, 137, 94, .22); }
@@ -748,6 +780,7 @@ h2 { margin: 0; color: #2a2a2a; font-family: Georgia, serif; font-size: 20px; fo
 @media (prefers-reduced-motion: reduce) {
   .capture-pill, .capture-pill-label, .capture-pill-status, .capture-pill-icon, .capture-pill-icon svg, .capture-pill-text-on, .capture-pill-text-off, .live-activity-button, .header-back-button, .timeline-day-caret svg, .connection-tooltip { transition: none; }
   .model-onboarding-sheet { animation: none; }
+  .chatgpt-waiting i { animation: none; }
   .live-activity-empty-pulse { animation: none; }
   .chat-message.is-thinking i { animation: none; }
 }

@@ -12,7 +12,7 @@ Secure and password-labeled fields, private browser windows, recognized adult we
 
 ## Where data is stored
 
-Raw activity, timeline entries, hour and day summaries, settings, encrypted API keys, and local-agent credentials are stored in a permission-restricted OpenHistory data directory on your Mac. When browser URL capture is enabled, a sanitized HTTPS destination selected as important may also be stored with a new hour or day summary so its matching label can be opened as a link. OpenHistory does not operate an analytics or telemetry service and does not receive this local data.
+Raw activity, timeline entries, hour and day summaries, settings, encrypted API keys, isolated Codex/ChatGPT credentials, and local-agent credentials are stored in a permission-restricted OpenHistory data directory on your Mac. When browser URL capture is enabled, a sanitized HTTPS destination selected as important may also be stored with a new hour or day summary so its matching label can be opened as a link. OpenHistory does not operate an analytics or telemetry service and does not receive this local data.
 
 You can pause capture from the app header, disable individual capture categories, exclude applications, inspect the local data folder, or delete all local OpenHistory data from Settings.
 
@@ -20,11 +20,11 @@ You can pause capture from the app header, disable individual capture categories
 
 Apple On-Device inference is experimental and runs through the system language model on a compatible Mac. Evidence does not leave the Mac through this path.
 
-OpenAI, Anthropic, and Kimi are optional cloud providers. Before OpenHistory enables a cloud provider, it shows a separate confirmation describing the evidence that can be transmitted. When enabled, OpenHistory sends selected evidence from completed work sessions directly to that provider to create summaries. When you use Chat, OpenHistory also sends the conversation, relevant sanitized history, and, when needed, privacy-filtered activity from a requested recent time window, whether or not that activity has already been included in a timeline summary. The provider handles that evidence under its own terms and privacy policy. OpenAI requests set `store: false`; OpenHistory does not control provider-side processing beyond the available API settings.
+OpenAI, Anthropic, and Kimi are optional cloud providers. Before OpenHistory enables a cloud provider, it shows a separate confirmation describing the evidence that can be transmitted. When enabled, OpenHistory sends selected evidence from completed work sessions directly to that provider to create summaries. When you use Chat, OpenHistory also sends the conversation, relevant sanitized history, and, when needed, privacy-filtered activity from a requested recent time window, whether or not that activity has already been included in a timeline summary. The provider handles that evidence under its own terms and privacy policy. OpenAI API-key requests set `store: false`. ChatGPT-backed OpenAI requests use the official Codex SDK and the user's Codex plan limits. OpenHistory does not control provider-side processing beyond the available API or Codex settings.
 
-First-run setup requires choosing a summary model after accepting local activity collection. The Apple option is labeled as experimental, lower quality, and maximum privacy. Cloud options are labeled as higher quality and external processing, require a provider key, and repeat the transmission disclosure before setup can finish. Apple setup cannot finish when the system model is unavailable; the app explains the on-device requirement and asks the user to upgrade or choose a cloud provider. It never silently falls back to cloud.
+First-run setup requires choosing a summary model after accepting local activity collection. The Apple option is labeled as experimental, lower quality, and maximum privacy. Cloud options are labeled as higher quality and external processing and repeat the transmission disclosure before setup can finish. OpenAI accepts either an isolated ChatGPT sign-in or a provider key; Anthropic and Kimi require provider keys. Apple setup cannot finish when the system model is unavailable; the app explains the on-device requirement and asks the user to upgrade or choose a cloud provider. It never silently falls back to cloud.
 
-Saving an API key alone does not authorize cloud inference. Keys saved in the app are encrypted using macOS-backed Electron secure storage and are never returned to the renderer.
+Saving an API key or signing in with ChatGPT alone does not authorize cloud inference. Keys saved in the app are encrypted using macOS-backed Electron secure storage and are never returned to the renderer. ChatGPT credentials are managed by the bundled Codex runtime under `<activity-data>/codex`, use file-backed storage restricted to the current user, and remain separate from the user's normal Codex CLI account. The SDK runs against an empty read-only workspace with tools, subagents, web search, and CLI input history disabled. Codex may keep its normal session bookkeeping inside this isolated directory; **Delete all local data** stops Codex before removing the directory, credentials, and those records together.
 
 ## Local agent access
 
@@ -36,7 +36,7 @@ The Settings action **Export safe diagnostics** creates a JSON file containing a
 
 ## Deletion and uninstalling
 
-The Settings action **Delete all local data** permanently removes the app's owned activity-data directory, including raw activity, generated summaries, settings, saved API keys, and agent connections, then restarts the app. It requires a native confirmation. The deletion implementation refuses directories without an OpenHistory ownership marker and cannot target repository fixtures, evaluation corpora, or folders outside the dedicated `activity-data` root.
+The Settings action **Delete all local data** permanently removes the app's owned activity-data directory, including raw activity, generated summaries, settings, saved API keys, isolated ChatGPT credentials, and agent connections, then restarts the app. It requires a native confirmation. The deletion implementation refuses directories without an OpenHistory ownership marker and cannot target repository fixtures, evaluation corpora, or folders outside the dedicated `activity-data` root.
 
 To uninstall completely:
 

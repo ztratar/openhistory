@@ -14,10 +14,12 @@ test("diagnostics omit activity content, local paths, errors, and credentials", 
         version: 1,
         enabled: true,
         provider: "openai",
+        openAIAuthMode: "chatgpt",
         models: { apple: "system-default", openai: "gpt-test", anthropic: "a", kimi: "k" }
       },
       configured: true,
       appleAvailability: { available: false, reason: secret },
+      codexAccount: { status: "signedIn", email: `${secret}@example.com`, planType: "plus" },
       keySources: { apple: "none", openai: "saved", anthropic: "none", kimi: "none" }
     },
     recentEvents: [{ id: secret }],
