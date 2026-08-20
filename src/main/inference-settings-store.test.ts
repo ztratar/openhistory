@@ -11,6 +11,7 @@ test("defaults to enabled OpenAI inference while honoring environment model defa
   const settings = new InferenceSettingsStore(directory, { openai: "custom-openai-model" }).load();
   assert.equal(settings.enabled, true);
   assert.equal(settings.provider, "openai");
+  assert.equal(settings.openAIAuthMode, "apiKey");
   assert.equal(settings.models.openai, "custom-openai-model");
   assert.equal(settings.models.anthropic, "claude-sonnet-5");
   assert.equal(settings.models.kimi, "kimi-k3");
@@ -23,6 +24,7 @@ test("persists provider, model, and disabled state", async (context) => {
     version: 1,
     enabled: false,
     provider: "kimi",
+    openAIAuthMode: "chatgpt",
     models: {
       apple: "system-default",
       openai: "gpt-5.6-terra",
@@ -34,6 +36,7 @@ test("persists provider, model, and disabled state", async (context) => {
     version: 1,
     enabled: false,
     provider: "kimi",
+    openAIAuthMode: "chatgpt",
     models: {
       apple: "system-default",
       openai: "gpt-5.6-terra",

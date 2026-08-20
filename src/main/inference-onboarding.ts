@@ -40,10 +40,28 @@ export function normalizeInferenceOnboardingSelection(
     return { provider: candidate.provider, model, ...captureSelections };
   }
 
+  if (candidate.provider === "openai" && candidate.openAIAuthMode === "chatgpt") {
+    return {
+      provider: candidate.provider,
+      model,
+      openAIAuthMode: "chatgpt",
+      ...captureSelections
+    };
+  }
+  if (candidate.openAIAuthMode !== undefined && candidate.openAIAuthMode !== "apiKey") {
+    throw new Error("Invalid OpenAI authentication mode");
+  }
+
   const apiKey = typeof candidate.apiKey === "string" ? candidate.apiKey.trim() : "";
   if (!apiKey) throw new Error(`${candidate.provider} requires an API key`);
   if (apiKey.length > 10_000) throw new Error("API key is too long");
-  return { provider: candidate.provider, model, apiKey, ...captureSelections };
+  return {
+    provider: candidate.provider,
+    model,
+    apiKey,
+    ...(candidate.provider === "openai" ? { openAIAuthMode: "apiKey" as const } : {}),
+    ...captureSelections
+  };
 }
 
 export function assertInferenceOnboardingAvailability(

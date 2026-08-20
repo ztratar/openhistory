@@ -18,14 +18,17 @@ import {
   DEFAULT_INFERENCE_MODELS,
   appleInferenceAvailabilityGuidance,
   isCloudInferenceProvider,
+  selectedOpenAIAuthMode,
   INFERENCE_MODEL_OPTIONS,
   INFERENCE_PROVIDER_LABELS,
   INFERENCE_PROVIDERS,
   type ApiKeySource,
   type AppleInferenceAvailability,
+  type CodexAccountState,
   type CloudInferenceProvider,
   type InferenceProvider,
-  type InferenceSettings
+  type InferenceSettings,
+  type OpenAIAuthMode
 } from "@shared/inference";
 import { linkifyHistoryText } from "@shared/history-links";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -217,6 +220,7 @@ export function App(): React.JSX.Element {
               <InferenceOnboarding
                 accessibilityTrusted={state.accessibilityTrusted}
                 appleAvailability={state.inference.appleAvailability}
+                codexAccount={state.inference.codexAccount}
                 setState={setState}
               />
             ) : page === "History" ? (
@@ -603,7 +607,7 @@ const INFERENCE_ONBOARDING_COPY: Record<InferenceProvider, {
   openai: {
     badge: "High quality",
     description: "Strongest overall summaries and interpretation of ambiguous work.",
-    drawback: "Requires an API key. Selected activity evidence is sent to OpenAI.",
+    drawback: "Use ChatGPT sign-in or an API key. Selected activity evidence is sent to OpenAI.",
     name: "OpenAI"
   },
   anthropic: {
@@ -642,15 +646,18 @@ function BadgeIcon({ kind }: { kind: "experimental" | "recommended" }): React.JS
 function InferenceOnboarding({
   accessibilityTrusted,
   appleAvailability,
+  codexAccount,
   setState
 }: {
   accessibilityTrusted: boolean;
   appleAvailability: AppleInferenceAvailability;
+  codexAccount: CodexAccountState;
   setState: SetAppState;
 }): React.JSX.Element {
   const [provider, setProvider] = useState<InferenceProvider>();
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [openAIAuthMode, setOpenAIAuthMode] = useState<OpenAIAuthMode>("chatgpt");
   const [step, setStep] = useState<"model" | "capture" | "presentation">("model");
   const [captureEmailActivity, setCaptureEmailActivity] = useState(true);
   const [captureMessagingActivity, setCaptureMessagingActivity] = useState(true);
@@ -660,11 +667,16 @@ function InferenceOnboarding({
   const [error, setError] = useState<string>();
   const cloudProvider = provider && isCloudInferenceProvider(provider) ? provider : undefined;
   const appleUnavailable = provider === "apple" && !appleAvailability.available;
+  const chatGPTSelected = provider === "openai" && openAIAuthMode === "chatgpt";
+  const credentialMissing = Boolean(cloudProvider && (
+    chatGPTSelected ? codexAccount.status !== "signedIn" : !apiKey.trim()
+  ));
 
   function chooseProvider(next: InferenceProvider): void {
     setProvider(next);
     setModel(DEFAULT_INFERENCE_MODELS[next]);
     setApiKey("");
+    setOpenAIAuthMode(next === "openai" ? "chatgpt" : "apiKey");
     setError(undefined);
   }
 
@@ -676,7 +688,7 @@ function InferenceOnboarding({
   }
 
   function continueSetup(): void {
-    if (!provider || !model || appleUnavailable || (cloudProvider && !apiKey.trim())) return;
+    if (!provider || !model || appleUnavailable || credentialMissing) return;
     setError(undefined);
     setStep("capture");
   }
@@ -693,6 +705,24 @@ function InferenceOnboarding({
     }
   }
 
+  async function signInWithChatGPT(): Promise<void> {
+    setError(undefined);
+    try {
+      setState(await window.openHistory.signInWithChatGPT());
+    } catch {
+      setError("OpenHistory could not start ChatGPT sign-in. Try again or use an API key.");
+    }
+  }
+
+  async function cancelChatGPTSignIn(): Promise<void> {
+    setError(undefined);
+    try {
+      setState(await window.openHistory.cancelChatGPTSignIn());
+    } catch {
+      setError("OpenHistory could not cancel ChatGPT sign-in.");
+    }
+  }
+
   function continueCapture(emailActivity: boolean, messagingActivity: boolean): void {
     setCaptureEmailActivity(emailActivity);
     setCaptureMessagingActivity(messagingActivity);
@@ -701,7 +731,7 @@ function InferenceOnboarding({
   }
 
   async function completeSetup(): Promise<void> {
-    if (!provider || !model || appleUnavailable || (cloudProvider && !apiKey.trim())) return;
+    if (!provider || !model || appleUnavailable || credentialMissing) return;
     setSaving(true);
     setError(undefined);
     try {
@@ -711,7 +741,8 @@ function InferenceOnboarding({
         captureEmailActivity,
         captureMessagingActivity,
         appPresentationMode: presentationMode,
-        ...(cloudProvider ? { apiKey } : {})
+        ...(provider === "openai" ? { openAIAuthMode } : {}),
+        ...(cloudProvider && !chatGPTSelected ? { apiKey } : {})
       }));
     } catch {
       setError("OpenHistory could not finish model setup. Check the selection and try again.");
@@ -835,17 +866,52 @@ function InferenceOnboarding({
                   <p>Moonshot AI is a Chinese company operating under Chinese law. By selecting Kimi, you understand that Moonshot AI data is subject to national intelligence and cybersecurity state oversight.</p>
                 </div>
               ) : null}
-              <label className="onboarding-key-field">
-                <span>{INFERENCE_PROVIDER_LABELS[cloudProvider]} API key</span>
-                <input
-                  aria-label={`${INFERENCE_PROVIDER_LABELS[cloudProvider]} API key`}
-                  autoComplete="new-password"
-                  onChange={(event) => setApiKey(event.target.value)}
-                  placeholder="Enter API key"
-                  type="password"
-                  value={apiKey}
-                />
-              </label>
+              {cloudProvider === "openai" && openAIAuthMode === "chatgpt" ? (
+                <div className="onboarding-chatgpt-auth">
+                  <div className="chatgpt-auth-heading">
+                    <span className={`chatgpt-auth-mark ${codexAccount.status}`} aria-hidden="true">
+                      {codexAccount.status === "signedIn" ? "✓" : <ProviderLogo provider="openai" />}
+                    </span>
+                    <span>
+                      <strong>{codexAccount.status === "signedIn" ? "ChatGPT connected" : "Use your ChatGPT plan"}</strong>
+                      <small>{codexAccount.status === "signedIn"
+                        ? `${planTypeLabel(codexAccount.planType)} access is ready`
+                        : codexAccount.status === "signingIn" ? "Waiting for your browser" : "Sign in through Codex"}</small>
+                    </span>
+                  </div>
+                  {codexAccount.status === "signingIn" ? (
+                    <div className="chatgpt-auth-actions">
+                      <span className="chatgpt-waiting"><i />Complete sign-in in your browser.</span>
+                      <button className="text-button" onClick={() => void cancelChatGPTSignIn()} type="button">Cancel</button>
+                    </div>
+                  ) : codexAccount.status === "signedIn" ? (
+                    <button className="text-button align-left" onClick={() => setOpenAIAuthMode("apiKey")} type="button">Use an API key instead</button>
+                  ) : (
+                    <div className="chatgpt-auth-actions">
+                      <button className="primary-button" onClick={() => void signInWithChatGPT()} type="button">Sign in with ChatGPT</button>
+                      <button className="text-button" onClick={() => setOpenAIAuthMode("apiKey")} type="button">Use an API key instead</button>
+                    </div>
+                  )}
+                  <p>OpenHistory keeps this login separate from the Codex CLI and never exposes its tokens to the page.</p>
+                </div>
+              ) : (
+                <div className="onboarding-api-key-auth">
+                  <label className="onboarding-key-field">
+                    <span>{INFERENCE_PROVIDER_LABELS[cloudProvider]} API key</span>
+                    <input
+                      aria-label={`${INFERENCE_PROVIDER_LABELS[cloudProvider]} API key`}
+                      autoComplete="new-password"
+                      onChange={(event) => setApiKey(event.target.value)}
+                      placeholder="Enter API key"
+                      type="password"
+                      value={apiKey}
+                    />
+                  </label>
+                  {cloudProvider === "openai" ? (
+                    <button className="text-button align-left" onClick={() => setOpenAIAuthMode("chatgpt")} type="button">Use ChatGPT instead</button>
+                  ) : null}
+                </div>
+              )}
               <div className="onboarding-cloud-disclosure">
                 <strong>External processing</strong>
                 <p>About every 10 minutes, OpenHistory will send evidence from completed work sessions directly to {INFERENCE_PROVIDER_LABELS[cloudProvider]}. This can include app names, window titles, URLs or domains, document context, visible interface text, and text changes according to your capture settings. Raw event files remain local.</p>
@@ -871,7 +937,7 @@ function InferenceOnboarding({
           {error ? <ErrorMessage>{error}</ErrorMessage> : null}
           <button
             className="primary-button model-onboarding-continue"
-            disabled={saving || !model || appleUnavailable || Boolean(cloudProvider && !apiKey.trim())}
+            disabled={saving || !model || appleUnavailable || credentialMissing}
             onClick={continueSetup}
             type="button"
           >
@@ -879,7 +945,7 @@ function InferenceOnboarding({
               ? `Allow ${INFERENCE_PROVIDER_LABELS[cloudProvider]} and continue`
               : "Continue"}
           </button>
-          {cloudProvider ? <p className="onboarding-key-note">Your key is encrypted on this Mac and is never shown again.</p> : null}
+          {cloudProvider && !chatGPTSelected ? <p className="onboarding-key-note">Your key is encrypted on this Mac and is never shown again.</p> : null}
           </div>
         </div>
       ) : null}
@@ -1269,6 +1335,8 @@ function HistoryPage({
   const updating = state.timeline.summarizing || state.hour.consolidating || state.dailyRollup.consolidating;
   const updateError = state.timeline.lastError ?? state.hour.lastError ?? state.dailyRollup.lastError;
   const appleGuidance = appleInferenceAvailabilityGuidance(state.inference.appleAvailability);
+  const chatGPTRequired = state.inference.settings.provider === "openai" &&
+    selectedOpenAIAuthMode(state.inference.settings) === "chatgpt";
 
   async function buildHistory(): Promise<void> {
     setState(await window.openHistory.buildHistory());
@@ -1299,13 +1367,15 @@ function HistoryPage({
           <span className="api-key-callout-copy">
             <strong>{state.inference.settings.provider === "apple"
               ? appleGuidance.title
-              : "Automatic timeline updates need an API key"}</strong>
+              : chatGPTRequired ? "Connect ChatGPT to update your timeline" : "Automatic timeline updates need an API key"}</strong>
             <span>{state.inference.settings.provider === "apple"
               ? appleGuidance.description
-              : `Add a key for ${INFERENCE_PROVIDER_LABELS[state.inference.settings.provider]} in Settings.`}</span>
+              : chatGPTRequired
+                ? "Finish the isolated Codex sign-in from Settings."
+                : `Add a key for ${INFERENCE_PROVIDER_LABELS[state.inference.settings.provider]} in Settings.`}</span>
           </span>
           <button className="api-key-callout-action" onClick={onAddApiKey} type="button">
-            {state.inference.settings.provider === "apple" ? "Review" : "Add now"} <span aria-hidden="true">→</span>
+            {state.inference.settings.provider === "apple" ? "Review" : chatGPTRequired ? "Open Settings" : "Add now"} <span aria-hidden="true">→</span>
           </button>
         </div>
       ) : null}
@@ -1942,6 +2012,7 @@ function SettingsPage({
   const inferenceProvider = state.inference.settings.provider;
   const inferenceModel = state.inference.settings.models[inferenceProvider];
   const apiKeySource = state.inference.keySources[inferenceProvider];
+  const openAIAuthMode = selectedOpenAIAuthMode(state.inference.settings);
 
   useEffect(() => {
     if (apiKeyFocusRequest === 0) return;
@@ -2001,15 +2072,55 @@ function SettingsPage({
     }
   }
 
+  async function signInWithChatGPT(): Promise<void> {
+    setSavingApiKey(true);
+    setApiKeyMessage(undefined);
+    try {
+      setState(await window.openHistory.signInWithChatGPT());
+    } catch {
+      setApiKeyMessage("ChatGPT sign-in could not start. Try again or use an API key.");
+    } finally {
+      setSavingApiKey(false);
+    }
+  }
+
+  async function cancelChatGPTSignIn(): Promise<void> {
+    setSavingApiKey(true);
+    setApiKeyMessage(undefined);
+    try {
+      setState(await window.openHistory.cancelChatGPTSignIn());
+    } catch {
+      setApiKeyMessage("ChatGPT sign-in could not be cancelled.");
+    } finally {
+      setSavingApiKey(false);
+    }
+  }
+
+  async function signOutOfChatGPT(): Promise<void> {
+    setSavingApiKey(true);
+    setApiKeyMessage(undefined);
+    try {
+      setState(await window.openHistory.signOutOfChatGPT());
+    } catch {
+      setApiKeyMessage("ChatGPT sign-out could not be completed.");
+    } finally {
+      setSavingApiKey(false);
+    }
+  }
+
   async function updateInference(next: InferenceSettings): Promise<void> {
-    if (
-      next.enabled &&
-      isCloudInferenceProvider(next.provider) &&
-      (
-        !state.settings.cloudInferenceConsents.includes(next.provider) ||
-        state.inference.keySources[next.provider] === "none"
-      )
-    ) {
+    const needsChatGPT = next.provider === "openai" &&
+      selectedOpenAIAuthMode(next) === "chatgpt" &&
+      state.inference.codexAccount.status !== "signedIn";
+    if (next.enabled && needsChatGPT) {
+      setApiKeyMessage("Sign in with ChatGPT before turning on automatic summaries.");
+      return;
+    }
+    const usesChatGPT = next.provider === "openai" && selectedOpenAIAuthMode(next) === "chatgpt";
+    if (next.enabled && isCloudInferenceProvider(next.provider) && (
+      !state.settings.cloudInferenceConsents.includes(next.provider) ||
+      (!usesChatGPT && state.inference.keySources[next.provider] === "none")
+    )) {
       setApiKeyMessage(undefined);
       setPendingCloudSettings(next);
       return;
@@ -2027,7 +2138,9 @@ function SettingsPage({
 
   async function confirmCloudInference(provider: CloudInferenceProvider, apiKey: string): Promise<void> {
     if (!pendingCloudSettings) return;
-    const needsApiKey = state.inference.keySources[provider] === "none";
+    const needsApiKey = !(provider === "openai" &&
+      selectedOpenAIAuthMode(pendingCloudSettings) === "chatgpt") &&
+      state.inference.keySources[provider] === "none";
     const normalizedApiKey = apiKey.trim();
     if (needsApiKey && !normalizedApiKey) return;
     setSavingApiKey(true);
@@ -2070,6 +2183,16 @@ function SettingsPage({
   }
 
   function selectProvider(provider: InferenceProvider): void {
+    if (provider === "openai") {
+      const usesChatGPT = selectedOpenAIAuthMode(state.inference.settings) === "chatgpt";
+      const missingCredential = usesChatGPT
+        ? state.inference.codexAccount.status !== "signedIn"
+        : state.inference.keySources.openai === "none";
+      if (missingCredential) {
+        void updateInference({ ...state.inference.settings, provider, enabled: false });
+        return;
+      }
+    }
     void updateInference({ ...state.inference.settings, provider });
   }
 
@@ -2077,6 +2200,17 @@ function SettingsPage({
     void updateInference({
       ...state.inference.settings,
       models: { ...state.inference.settings.models, [inferenceProvider]: model }
+    });
+  }
+
+  function useOpenAIApiKey(): void {
+    const hasApiKey = state.inference.keySources.openai !== "none";
+    void updateInference({
+      ...state.inference.settings,
+      openAIAuthMode: "apiKey",
+      enabled: hasApiKey ? state.inference.settings.enabled : false
+    }).then(() => {
+      if (!hasApiKey) setApiKeyMessage("Add an OpenAI API key to turn automatic summaries back on.");
     });
   }
 
@@ -2118,6 +2252,8 @@ function SettingsPage({
             <strong>Automatic summaries</strong>
             <small>{inferenceProvider === "apple"
               ? "Summarize activity privately on this Mac about every 10 minutes."
+              : inferenceProvider === "openai" && openAIAuthMode === "chatgpt"
+                ? "Send selected evidence to OpenAI using your ChatGPT plan about every 10 minutes."
               : "Send activity evidence to your selected provider about every 10 minutes."}</small>
           </span>
           <input
@@ -2181,7 +2317,17 @@ function SettingsPage({
           ))}
         </div>
       </div>
-      {inferenceProvider === "apple" ? (
+      {inferenceProvider === "openai" && openAIAuthMode === "chatgpt" ? (
+        <ChatGPTAccountSettings
+          account={state.inference.codexAccount}
+          busy={savingApiKey}
+          message={apiKeyMessage}
+          onCancel={() => void cancelChatGPTSignIn()}
+          onSignIn={() => void signInWithChatGPT()}
+          onSignOut={() => void signOutOfChatGPT()}
+          onUseApiKey={useOpenAIApiKey}
+        />
+      ) : inferenceProvider === "apple" ? (
         <div className="card api-key-settings" id="api-key-settings">
           <div className="api-key-heading">
             <div>
@@ -2213,6 +2359,11 @@ function SettingsPage({
               Remove saved key
             </button>
           ) : null}
+          {inferenceProvider === "openai" ? (
+            <button className="text-button" disabled={savingApiKey} onClick={() => void signInWithChatGPT()} type="button">
+              Use ChatGPT instead
+            </button>
+          ) : null}
         </div>
         <div className="api-key-form">
           <input
@@ -2234,7 +2385,13 @@ function SettingsPage({
         <div className="system-row">
           <span>{state.inference.settings.enabled ? INFERENCE_PROVIDER_LABELS[inferenceProvider] : "Inference"}</span>
           <strong>{state.inference.settings.enabled
-            ? state.inference.configured ? inferenceModel : inferenceProvider === "apple" ? "Unavailable" : "API key missing"
+            ? state.inference.configured
+              ? inferenceModel
+              : inferenceProvider === "apple"
+                ? "Unavailable"
+                : inferenceProvider === "openai" && openAIAuthMode === "chatgpt"
+                  ? "Sign-in required"
+                  : "API key missing"
             : "Off"}</strong>
         </div>
         <div className="system-row data-row">
@@ -2280,7 +2437,9 @@ function SettingsPage({
         <CloudInferenceDialog
           busy={savingApiKey}
           errorMessage={apiKeyMessage}
-          needsApiKey={state.inference.keySources[pendingCloudSettings.provider] === "none"}
+          needsApiKey={!(pendingCloudSettings.provider === "openai" &&
+            selectedOpenAIAuthMode(pendingCloudSettings) === "chatgpt") &&
+            state.inference.keySources[pendingCloudSettings.provider] === "none"}
           onCancel={() => setPendingCloudSettings(undefined)}
           onConfirm={(key) => void confirmCloudInference(
             pendingCloudSettings.provider as CloudInferenceProvider,
@@ -2290,6 +2449,69 @@ function SettingsPage({
         />
       ) : null}
     </section>
+  );
+}
+
+function ChatGPTAccountSettings({
+  account,
+  busy,
+  message,
+  onCancel,
+  onSignIn,
+  onSignOut,
+  onUseApiKey
+}: {
+  account: CodexAccountState;
+  busy: boolean;
+  message?: string;
+  onCancel: () => void;
+  onSignIn: () => void;
+  onSignOut: () => void;
+  onUseApiKey: () => void;
+}): React.JSX.Element {
+  const connected = account.status === "signedIn";
+  const signingIn = account.status === "signingIn";
+  return (
+    <div className="card chatgpt-account-settings" id="api-key-settings">
+      <div className="chatgpt-account-heading">
+        <div className="chatgpt-auth-heading">
+          <span className={`chatgpt-auth-mark ${account.status}`} aria-hidden="true">
+            {connected ? "✓" : <ProviderLogo provider="openai" />}
+          </span>
+          <span>
+            <strong>{connected ? "ChatGPT connected" : signingIn ? "Finish signing in" : "OpenAI account"}</strong>
+            <small>{connected
+              ? "Subscription access is ready"
+              : signingIn ? "Waiting for your browser" : account.status === "unavailable" ? "Codex unavailable" : "Not connected"}</small>
+          </span>
+        </div>
+        {connected ? <span className="chatgpt-plan-badge">{planTypeLabel(account.planType)}</span> : null}
+      </div>
+      <p>{connected
+        ? "Automatic summaries and Chat use your Codex plan limits. OpenHistory will show a clear error if the account reaches its current limit."
+        : "Use your existing ChatGPT plan and Codex allowance. This login is isolated from the Codex CLI and its tokens never enter the page."}</p>
+      {signingIn ? (
+        <div className="chatgpt-auth-actions">
+          <span className="chatgpt-waiting"><i />Complete sign-in in your browser.</span>
+          <button className="text-button" disabled={busy} onClick={onCancel} type="button">Cancel</button>
+        </div>
+      ) : (
+        <div className="chatgpt-auth-actions">
+          <button className={connected ? "secondary-button" : "primary-button"} disabled={busy || account.status === "unavailable"} onClick={connected ? onSignOut : onSignIn} type="button">
+            {connected ? "Sign out" : "Sign in with ChatGPT"}
+          </button>
+          <button className="text-button" disabled={busy} onClick={onUseApiKey} type="button">Use an API key instead</button>
+        </div>
+      )}
+      <div className="chatgpt-privacy-note">
+        <svg aria-hidden="true" viewBox="0 0 16 16"><rect x="3.2" y="7" width="9.6" height="7" rx="1.5" /><path d="M5.4 7V4.9a2.6 2.6 0 0 1 5.2 0V7" /></svg>
+        <span>{connected
+          ? "OpenHistory sends only the same versioned evidence packets used by its existing cloud providers. Raw event files stay local."
+          : "Signing in does not send activity. Evidence leaves this Mac only after cloud processing is confirmed and summaries are enabled."}</span>
+      </div>
+      {account.lastError ? <span className="api-key-message">{account.lastError}</span> : null}
+      {message ? <span className="api-key-message">{message}</span> : null}
+    </div>
   );
 }
 
@@ -2507,6 +2729,13 @@ function apiKeySourceLabel(source: ApiKeySource): string {
   if (source === "saved") return "Saved securely on this Mac";
   if (source === "environment") return "Using the local environment fallback";
   return "Not configured";
+}
+
+function planTypeLabel(value: string | undefined): string {
+  if (!value || value === "unknown") return "ChatGPT";
+  if (value === "self_serve_business_usage_based") return "Business";
+  if (value === "enterprise_cbp_usage_based") return "Enterprise";
+  return value.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
 function apiKeyEnvironmentName(provider: InferenceProvider): string {

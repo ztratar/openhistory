@@ -28,6 +28,7 @@ test("requires and trims a cloud credential", () => {
     provider: "openai",
     model: "gpt-5.6-luna",
     apiKey: "sk-synthetic",
+    openAIAuthMode: "apiKey",
     captureEmailActivity: false,
     captureMessagingActivity: false,
     appPresentationMode: "dock"
@@ -43,12 +44,14 @@ test("normalizes independent onboarding capture opt-ins", () => {
     provider: "openai",
     model: "gpt-5.6-luna",
     apiKey: "sk-synthetic",
+    openAIAuthMode: "apiKey",
     captureEmailActivity: true,
     captureMessagingActivity: false
   }), {
     provider: "openai",
     model: "gpt-5.6-luna",
     apiKey: "sk-synthetic",
+    openAIAuthMode: "apiKey",
     captureEmailActivity: true,
     captureMessagingActivity: false,
     appPresentationMode: "dock"
@@ -63,6 +66,21 @@ test("normalizes independent onboarding capture opt-ins", () => {
     model: "system-default",
     appPresentationMode: "window"
   }), /Invalid app presentation selection/);
+});
+
+test("accepts ChatGPT sign-in for OpenAI without an API key", () => {
+  assert.deepEqual(normalizeInferenceOnboardingSelection({
+    provider: "openai",
+    model: "gpt-5.6-luna",
+    openAIAuthMode: "chatgpt"
+  }), {
+    provider: "openai",
+    model: "gpt-5.6-luna",
+    openAIAuthMode: "chatgpt",
+    captureEmailActivity: false,
+    captureMessagingActivity: false,
+    appPresentationMode: "dock"
+  });
 });
 
 test("accepts menu bar presentation during onboarding", () => {

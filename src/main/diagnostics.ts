@@ -40,6 +40,8 @@ export function sanitizedDiagnostics(
       enabled: state.inference.settings.enabled,
       provider: state.inference.settings.provider,
       model: state.inference.settings.models[state.inference.settings.provider],
+      openAIAuthMode: state.inference.settings.openAIAuthMode ?? "apiKey",
+      codexAccountStatus: state.inference.codexAccount.status,
       configured: state.inference.configured,
       keySource: state.inference.keySources[state.inference.settings.provider],
       hasTimelineError: Boolean(state.timeline.lastError),

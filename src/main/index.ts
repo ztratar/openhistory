@@ -17,7 +17,9 @@ import {
   INFERENCE_PROVIDERS,
   isCloudInferenceProvider,
   isInferenceProvider,
+  selectedOpenAIAuthMode,
   type AppleInferenceAvailability,
+  type CodexAccountState,
   type CloudInferenceProvider,
   type ApiKeySource,
   type InferenceProvider,
@@ -49,6 +51,8 @@ import { ApiKeyStore } from "./api-key-store";
 import { loadApplicationIcon } from "./application-icon";
 import { CollectorService } from "./collector-service";
 import { getRuntimeConfig } from "./config";
+import { CodexAuthService, safeOpenAIAuthUrl } from "./codex-auth-service";
+import { createCodexRuntime, type CodexRuntime } from "./codex-runtime";
 import { deleteOwnedDataDirectory, ensureOwnedDataDirectory } from "./data-directory";
 import { sanitizedDiagnostics } from "./diagnostics";
 import { HourCoordinator } from "./hour-coordinator";
@@ -78,7 +82,7 @@ import { DailyRollupStore } from "./daily-rollup-store";
 import { InferenceService } from "./openai-service";
 import { inferenceErrorMetadata, publicInferenceErrorMessage } from "./openai-error";
 import { writePrivateFile } from "./private-storage";
-import { cloudInferenceNeedsApiKey, cloudInferenceNeedsConsent } from "./privacy-consent";
+import { cloudInferenceNeedsConsent, cloudInferenceNeedsCredential } from "./privacy-consent";
 import { ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS } from "./privacy-policy";
 import { reconcileProtectedHistory } from "./privacy-reconciler";
 import { isTrustedRendererUrl, safeExternalHttpsUrl } from "./renderer-security";
@@ -99,6 +103,9 @@ let menuBarBlurTimer: ReturnType<typeof setTimeout> | undefined;
 let menuBarWindowShowRequested = false;
 let appPresentationModeTimer: ReturnType<typeof setTimeout> | undefined;
 let collector: CollectorService;
+let codexAuth: CodexAuthService | undefined;
+let codexRuntime: CodexRuntime | undefined;
+let codexUnavailableState: CodexAccountState = { status: "starting" };
 let inference: InferenceService;
 let timeline: TimelineCoordinator;
 let settingsStore: SettingsStore;
@@ -470,6 +477,7 @@ function bootstrapState(): BootstrapState {
       settings: structuredClone(inferenceSettings),
       configured: inference.configured,
       appleAvailability: { ...appleAvailability },
+      codexAccount: currentCodexAccount(),
       keySources: { ...apiKeySources }
     },
     recentEvents: collector.recentEvents,
@@ -568,6 +576,16 @@ async function initialize(): Promise<void> {
   ensureOwnedDataDirectory(config.dataDirectory, {
     adoptExistingUnmarked: config.adoptExistingDataDirectory
   });
+  try {
+    codexRuntime = createCodexRuntime(config.dataDirectory);
+    codexAuth = new CodexAuthService(codexRuntime, app.getVersion());
+    await codexAuth.start();
+  } catch {
+    codexUnavailableState = {
+      status: "unavailable",
+      lastError: "This build does not include a usable Codex runtime. API-key providers still work."
+    };
+  }
   environmentApiKeys = config.inferenceApiKeys;
   appleAvailability = publicAppleAvailability(probeAppleFoundationModel());
   apiKeyStores = Object.fromEntries(INFERENCE_PROVIDERS.map((provider) => [
@@ -591,7 +609,9 @@ async function initialize(): Promise<void> {
   if (settings.privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) collector.setEnabled(false);
   inference = new InferenceService({
     settings: inferenceSettings,
-    apiKey: activeApiKey(inferenceSettings.provider)
+    apiKey: activeApiKey(inferenceSettings.provider),
+    chatGPTSignedIn: currentCodexAccount().status === "signedIn",
+    codexRuntime
   });
   const timelineStore = new TimelineStore(join(config.dataDirectory, "timeline"));
   const hourStore = new HourStore(join(config.dataDirectory, "hours"));
@@ -647,6 +667,11 @@ async function initialize(): Promise<void> {
       }
     )
   );
+  codexAuth?.on("state", () => {
+    configureInferenceService();
+    sendBootstrapState();
+    buildHistoryIfNeeded();
+  });
   agentMcp.on("state", sendAgentAccessState);
   await agentMcp.start();
 
@@ -655,7 +680,7 @@ async function initialize(): Promise<void> {
   handleTrustedIpc(IPC_CHANNELS.refreshAppleAvailability, () => {
     appleAvailability = publicAppleAvailability(probeAppleFoundationModel());
     if (inferenceSettings.provider === "apple") {
-      inference.configure(inferenceSettings, activeApiKey("apple"));
+      configureInferenceService();
     }
     return bootstrapState();
   });
@@ -712,12 +737,17 @@ async function initialize(): Promise<void> {
     if (cloudInferenceNeedsConsent(next, settingsStore.load())) {
       throw new Error(`Cloud inference with ${next.provider} requires explicit confirmation`);
     }
-    if (cloudInferenceNeedsApiKey(next, activeApiKey(next.provider))) {
-      throw new Error(`${next.provider} requires an API key`);
+    if (cloudInferenceNeedsCredential(next, {
+      apiKey: activeApiKey(next.provider),
+      chatGPTSignedIn: currentCodexAccount().status === "signedIn"
+    })) {
+      throw new Error(next.provider === "openai" && selectedOpenAIAuthMode(next) === "chatgpt"
+        ? "OpenAI requires ChatGPT sign-in"
+        : `${next.provider} requires an API key`);
     }
     if (historyBuildPromise) await historyBuildPromise;
     inferenceSettings = inferenceSettingsStore.save(next);
-    inference.configure(inferenceSettings, activeApiKey(inferenceSettings.provider));
+    configureInferenceService();
     buildHistoryIfNeeded();
     return bootstrapState();
   });
@@ -732,7 +762,13 @@ async function initialize(): Promise<void> {
     if (historyBuildPromise) await historyBuildPromise;
     apiKeyStores[provider].save(normalized);
     apiKeySources[provider] = "saved";
-    if (provider === inferenceSettings.provider) inference.configure(inferenceSettings, normalized);
+    if (provider === "openai") {
+      inferenceSettings = inferenceSettingsStore.save({
+        ...inferenceSettings,
+        openAIAuthMode: "apiKey"
+      });
+    }
+    if (provider === inferenceSettings.provider) configureInferenceService();
     buildHistoryIfNeeded();
     return bootstrapState();
   });
@@ -742,8 +778,41 @@ async function initialize(): Promise<void> {
     apiKeyStores[provider].clear();
     apiKeySources[provider] = environmentApiKeys[provider] ? "environment" : "none";
     if (provider === inferenceSettings.provider) {
-      inference.configure(inferenceSettings, environmentApiKeys[provider]);
+      configureInferenceService();
     }
+    return bootstrapState();
+  });
+  handleTrustedIpc(IPC_CHANNELS.signInWithChatGPT, async () => {
+    if (!codexAuth) throw new Error(codexUnavailableState.lastError ?? "ChatGPT sign-in is unavailable");
+    if (historyBuildPromise) await historyBuildPromise;
+    inferenceSettings = inferenceSettingsStore.save({
+      ...inferenceSettings,
+      openAIAuthMode: "chatgpt"
+    });
+    const requestedUrl = await codexAuth.signIn();
+    const authUrl = safeOpenAIAuthUrl(requestedUrl);
+    if (!authUrl) {
+      await codexAuth.cancelSignIn();
+      throw new Error("Codex returned an unsafe ChatGPT sign-in URL");
+    }
+    try {
+      await shell.openExternal(authUrl);
+    } catch (error) {
+      await codexAuth.cancelSignIn();
+      throw error;
+    }
+    configureInferenceService();
+    return bootstrapState();
+  });
+  handleTrustedIpc(IPC_CHANNELS.cancelChatGPTSignIn, async () => {
+    await codexAuth?.cancelSignIn();
+    configureInferenceService();
+    return bootstrapState();
+  });
+  handleTrustedIpc(IPC_CHANNELS.signOutOfChatGPT, async () => {
+    if (historyBuildPromise) await historyBuildPromise;
+    await codexAuth?.logout();
+    configureInferenceService();
     return bootstrapState();
   });
   handleTrustedIpc(IPC_CHANNELS.acceptPrivacyNotice, () => {
@@ -773,8 +842,14 @@ async function initialize(): Promise<void> {
 
     let settings = current;
     if (isCloudInferenceProvider(selection.provider)) {
-      apiKeyStores[selection.provider].save(selection.apiKey!);
-      apiKeySources[selection.provider] = "saved";
+      const usesChatGPT = selection.provider === "openai" && selection.openAIAuthMode === "chatgpt";
+      if (usesChatGPT && currentCodexAccount().status !== "signedIn") {
+        throw new Error("Finish signing in with ChatGPT before continuing");
+      }
+      if (!usesChatGPT) {
+        apiKeyStores[selection.provider].save(selection.apiKey!);
+        apiKeySources[selection.provider] = "saved";
+      }
       settings = settingsStore.save({
         ...settings,
         cloudInferenceConsents: [
@@ -787,12 +862,15 @@ async function initialize(): Promise<void> {
       ...inferenceSettings,
       enabled: true,
       provider: selection.provider,
+      openAIAuthMode: selection.provider === "openai"
+        ? selection.openAIAuthMode ?? "apiKey"
+        : inferenceSettings.openAIAuthMode,
       models: {
         ...inferenceSettings.models,
         [selection.provider]: selection.model
       }
     });
-    inference.configure(inferenceSettings, activeApiKey(selection.provider));
+    configureInferenceService();
     const savedSettings = settingsStore.save({
       ...settings,
       inferenceOnboardingVersion: CURRENT_INFERENCE_ONBOARDING_VERSION,
@@ -866,7 +944,7 @@ async function initialize(): Promise<void> {
     const confirmation = await dialog.showMessageBox(mainWindow!, {
       type: "warning",
       title: "Delete all OpenHistory data?",
-      message: "Permanently delete your local activity, summaries, settings, keys, and agent connections?",
+      message: "Permanently delete your local activity, summaries, settings, keys, isolated ChatGPT sign-in, and agent connections?",
       detail: `This cannot be undone. OpenHistory will restart.\n\nData directory:\n${config.dataDirectory}`,
       buttons: ["Cancel", "Delete and restart"],
       defaultId: 0,
@@ -877,6 +955,7 @@ async function initialize(): Promise<void> {
     if (historyBuildPromise) await historyBuildPromise.catch(() => undefined);
     collector.stop();
     await agentMcp.stop();
+    await codexAuth?.stop();
     if (derivedStateTimer) clearInterval(derivedStateTimer);
     if (automaticHistoryTimer) clearInterval(automaticHistoryTimer);
     if (initialHistoryTimer) clearTimeout(initialHistoryTimer);
@@ -960,6 +1039,17 @@ function activeApiKey(provider: InferenceProvider): string | undefined {
   return apiKeyStores[provider].load() ?? environmentApiKeys[provider];
 }
 
+function currentCodexAccount(): CodexAccountState {
+  return codexAuth?.getState() ?? structuredClone(codexUnavailableState);
+}
+
+function configureInferenceService(): void {
+  inference.configure(inferenceSettings, activeApiKey(inferenceSettings.provider), {
+    codexRuntime,
+    signedIn: currentCodexAccount().status === "signedIn"
+  });
+}
+
 function publicAppleAvailability(
   availability: AppleInferenceAvailability
 ): AppleInferenceAvailability {
@@ -1002,6 +1092,7 @@ app.on("before-quit", () => {
   if (menuBarBlurTimer) clearTimeout(menuBarBlurTimer);
   collector?.stop();
   void agentMcp?.stop();
+  void codexAuth?.stop();
 });
 
 app.on("window-all-closed", () => {

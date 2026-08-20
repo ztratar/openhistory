@@ -23,6 +23,10 @@ raw local events
 - `providers/` owns one adapter per model API;
 - `service.ts` binds tasks to providers and constructs persisted records.
 
+OpenAI has two explicit credential paths. API-key mode uses the Responses API adapter. ChatGPT mode uses `@openai/codex-sdk` for the same structured task requests and a narrow app-server client for managed account login, logout, and account state. Both Codex processes share `<activity-data>/codex` as an isolated `CODEX_HOME`; they do not read or replace the user's normal Codex CLI account.
+
+The ChatGPT adapter starts a fresh SDK thread for each generation with a read-only empty working directory, approvals set to `never`, shell tools and subagents disabled, web search disabled, and CLI input history disabled. The current SDK may retain its normal session bookkeeping, so every Codex-owned file is confined to the isolated `<activity-data>/codex` directory and removed by the existing local-data deletion flow. The renderer receives only account status, plan label, and optional email display data—never tokens. App-server subprocesses are terminated during shutdown and before local-data deletion, and unexpected exits are retried with bounded exponential backoff.
+
 The Apple executable uses a separate `FoundationModelProtocol` Swift library. Its wire format is tested without requiring the Foundation Models framework. Live guided generation remains in the thin `FoundationModelWorker` executable.
 
 ## Preserved task versions
@@ -43,6 +47,7 @@ The authoritative manifest is `src/main/inference/tasks.ts`. It versions inputs,
 4. For an intentional prompt or input change, create a new version and compare it with the previous version on the private held-out corpus.
 5. Keep public fixtures synthetic. Never commit captured events, model inputs derived from a person, credentials, or private model outputs.
 6. Local inference failure must never silently send evidence to a cloud provider.
+7. ChatGPT sign-in must remain isolated under OpenHistory's owned data root and must not inherit ambient OpenAI API credentials.
 
 ## Evaluation tiers
 
