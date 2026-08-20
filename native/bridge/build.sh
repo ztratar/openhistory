@@ -78,6 +78,7 @@ build_architecture() {
     native/collector/Sources/ActivityCollector/CollectorRuntime.swift \
     native/bridge/EmbeddedCollectorBridge.swift \
     "${bin_path}/ActivityCore.build/ActivityEvent.swift.o" \
+    "${bin_path}/ActivityCore.build/BrowserProtectionState.swift.o" \
     "${bin_path}/ActivityCore.build/EventWriter.swift.o" \
     "${bin_path}/ActivityCore.build/SemanticObservation.swift.o" \
     "${bin_path}/ActivityCore.build/SemanticProtectionPolicy.swift.o" \

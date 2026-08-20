@@ -9,6 +9,10 @@ const config = {
   nodeVersion: "22.19.0",
   npmVersion: "10.9.3",
   asar: true,
+  asarUnpack: [
+    "**/*.node",
+    "node_modules/@openai/codex-*/vendor/**"
+  ],
   fuses: {
     runAsNode: false,
     enableNodeOptionsEnvironmentVariable: false,

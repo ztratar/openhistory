@@ -34,6 +34,11 @@ expect(config.id === "260815ukaa3eq", "ToDesktop application identifier changed"
 expect(config.appId === "io.github.ztratar.openhistory", "production bundle identifier changed");
 expect(config.productName === "OpenHistory", "ToDesktop product name changed");
 expect(config.asar === true, "application code must remain in ASAR");
+expect(config.asarUnpack?.includes("**/*.node") === true, "native Node modules must remain unpacked from ASAR");
+expect(
+  config.asarUnpack?.includes("node_modules/@openai/codex-*/vendor/**") === true,
+  "the bundled Codex executable must be unpacked from ASAR"
+);
 expect(config.fuses?.runAsNode === false, "runAsNode fuse must remain disabled");
 expect(config.fuses?.enableNodeOptionsEnvironmentVariable === false, "NODE_OPTIONS fuse must remain disabled");
 expect(config.fuses?.enableNodeCliInspectArguments === false, "Node inspector fuse must remain disabled");
@@ -64,6 +69,11 @@ const mainSource = readFileSync(resolve(root, "src/main/index.ts"), "utf8");
 const collectorSource = readFileSync(resolve(root, "src/main/collector-service.ts"), "utf8");
 const appleSource = readFileSync(resolve(root, "src/main/inference/providers/apple.ts"), "utf8");
 const localPackagerSource = readFileSync(resolve(root, "scripts/package-local-app.ts"), "utf8");
+const nativeBridgeBuildSource = readFileSync(resolve(root, "native/bridge/build.sh"), "utf8");
+const nativeAppPackagerSource = readFileSync(
+  resolve(root, "native/collector/scripts/package-release-app.sh"),
+  "utf8"
+);
 const beforeBuildSource = readFileSync(resolve(root, "scripts/todesktop-before-build.cjs"), "utf8");
 const signedVerifierPath = resolve(root, "scripts/verify-signed-macos-app.sh");
 const signedVerifierSource = readFileSync(signedVerifierPath, "utf8");
@@ -77,6 +87,14 @@ expect(appleSource.includes('resolve(process.resourcesPath, "native", name)'), "
 expect(localPackagerSource.includes("ignoreOutsideRuntimeAllowlist"), "local package must use a runtime file allowlist");
 expect(localPackagerSource.includes("todesktop-after-pack.cjs"), "local package must exercise the ToDesktop native embedding hook");
 expect(localPackagerSource.includes("OnlyLoadAppFromAsar"), "local package must enforce ASAR-only loading");
+expect(localPackagerSource.includes("@openai/codex-*/vendor"), "local package must unpack the Codex executable");
+expect(localPackagerSource.includes("clearUnsupportedSigningMetadata(application)"), "local package must normalize app metadata before signing");
+expect(localPackagerSource.includes("OPENHISTORY_LOCAL_PACKAGE_OUTPUT"), "local package must support a non-File Provider staging directory");
+expect(
+  nativeBridgeBuildSource.includes("ActivityCore.build/BrowserProtectionState.swift.o"),
+  "native bridge must link the browser-protection state implementation"
+);
+expect(nativeAppPackagerSource.includes('xattr -cr "${app_directory}"'), "native app must clear unsupported metadata before signing");
 expect(beforeBuildSource.includes("out/main/index.js"), "beforeBuild must validate prebuilt Electron output");
 expect(!beforeBuildSource.includes("build:electron"), "beforeBuild must not depend on remote development dependencies");
 expect((statSync(signedVerifierPath).mode & 0o111) !== 0, "signed macOS verifier is not executable");

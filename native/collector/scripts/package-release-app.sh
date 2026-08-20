@@ -82,6 +82,10 @@ chmod 755 \
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${app_version}" "${app_directory}/Contents/Info.plist"
 
 if [ "${sign_mode}" = "adhoc" ]; then
+  # Cloud-backed workspaces can attach FinderInfo or provenance metadata while the
+  # bundle is assembled. codesign rejects that metadata even though it is not part
+  # of the application, so normalize the generated bundle before signing it.
+  xattr -cr "${app_directory}"
   codesign --force --deep --sign - "${app_directory}"
 elif [ "${sign_mode}" != "none" ]; then
   echo "Unsupported native signing mode: ${sign_mode}" >&2
