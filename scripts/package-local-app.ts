@@ -5,11 +5,12 @@ import {
   FuseVersion
 } from "@electron/fuses";
 import { packager } from "@electron/packager";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { arch as hostArchitecture } from "node:os";
+import { arch as hostArchitecture, homedir } from "node:os";
 import { resolve } from "node:path";
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { selectLocalSigningIdentity } from "./local-signing-identity";
 
 const root = resolve(import.meta.dirname, "..");
 const architecture = hostArchitecture();
@@ -78,16 +79,37 @@ const nativeComponents = [
   "openhistory-native.node",
   "foundation-model-worker"
 ].map((name) => resolve(nativeDirectory, name));
+const availableIdentities = execFileSync("security", ["find-identity", "-v", "-p", "codesigning"], {
+  encoding: "utf8"
+});
+const signingConfigPath = resolve(homedir(), ".config", "openhistory", "local-signing.json");
+const signingConfig = existsSync(signingConfigPath)
+  ? JSON.parse(readFileSync(signingConfigPath, "utf8")) as { expectedIdentitySha1?: string; expectedTeamIdentifier?: string }
+  : {};
+const signingIdentity = selectLocalSigningIdentity(availableIdentities, {
+  configuredIdentity: process.env.OPENHISTORY_CODESIGN_IDENTITY,
+  expectedSha1: process.env.OPENHISTORY_CODESIGN_SHA1 ?? signingConfig.expectedIdentitySha1
+});
+const signingValue = signingIdentity?.sha1 ?? "-";
+if (!signingIdentity) {
+  process.stderr.write("Warning: no Apple Development identity found; using ad-hoc signing. Accessibility must be granted again after rebuilds.\n");
+} else {
+  process.stdout.write(`Signing local application with: ${signingIdentity.name} (${signingIdentity.sha1})\n`);
+}
 for (const component of nativeComponents) {
-  execFileSync("codesign", ["--force", "--sign", "-", "--timestamp=none", component], {
+  execFileSync("codesign", ["--force", "--sign", signingValue, "--timestamp=none", component], {
     stdio: "inherit"
   });
 }
-execFileSync("codesign", ["--force", "--deep", "--sign", "-", "--timestamp=none", application], {
+execFileSync("codesign", ["--force", "--deep", "--sign", signingValue, "--timestamp=none", application], {
   stdio: "inherit"
 });
 
-verifyApplication(application);
+verifyApplication(
+  application,
+  signingIdentity,
+  process.env.OPENHISTORY_CODESIGN_TEAM_ID ?? signingConfig.expectedTeamIdentifier
+);
 process.stdout.write(`Local application ready: ${application}\n`);
 
 function ignoreOutsideRuntimeAllowlist(candidate: string): boolean {
@@ -99,7 +121,11 @@ function ignoreOutsideRuntimeAllowlist(candidate: string): boolean {
   return !allowedDirectory;
 }
 
-function verifyApplication(applicationPath: string): void {
+function verifyApplication(
+  applicationPath: string,
+  expectedIdentity: { sha1: string; name: string } | undefined,
+  expectedTeamIdentifier: string | undefined
+): void {
   const infoPlist = resolve(applicationPath, "Contents", "Info.plist");
   const bundleIdentifier = execFileSync("/usr/libexec/PlistBuddy", [
     "-c",
@@ -129,5 +155,14 @@ function verifyApplication(applicationPath: string): void {
   execFileSync("codesign", ["--verify", "--deep", "--strict", applicationPath], {
     stdio: "inherit"
   });
+  const display = spawnSync("codesign", ["-dv", "--verbose=4", applicationPath], { encoding: "utf8" });
+  if (display.status !== 0) throw new Error(`Could not inspect packaged signature: ${display.stderr}`);
+  const signingDetails = `${display.stdout ?? ""}\n${display.stderr ?? ""}`;
+  if (expectedIdentity && !signingDetails.includes(`Authority=${expectedIdentity.name}`)) {
+    throw new Error(`Packaged signature did not use expected authority: ${expectedIdentity.name}`);
+  }
+  if (expectedTeamIdentifier && !signingDetails.includes(`TeamIdentifier=${expectedTeamIdentifier}`)) {
+    throw new Error(`Packaged signature did not use expected team: ${expectedTeamIdentifier}`);
+  }
   execFileSync("plutil", ["-lint", infoPlist], { stdio: "inherit" });
 }
