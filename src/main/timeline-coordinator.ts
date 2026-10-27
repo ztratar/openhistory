@@ -6,6 +6,7 @@ import { inferenceErrorMetadata, publicInferenceErrorMessage } from "./openai-er
 import { isItemScopedInferenceError } from "./inference/errors";
 import type { ActivityPrivacyOptions } from "./privacy-policy";
 import { TimelineStore } from "./timeline-store";
+import { newestFirstWithOldestProgress } from "./catch-up-priority";
 
 const MIN_EPISODE_WINDOW_MS = 8 * 60 * 1_000;
 const ACTIVE_EPISODE_GRACE_MS = 60 * 1_000;
@@ -45,7 +46,8 @@ export class TimelineCoordinator {
 
     try {
       if (!this.inference.configured) throw new Error(this.inference.unavailableMessage);
-      const pending = this.pendingEpisodes().slice(0, MAX_EPISODES_PER_REQUEST);
+      // Newest first, with one reserved slot so historical backlog cannot starve.
+      const pending = newestFirstWithOldestProgress(this.pendingEpisodes(), MAX_EPISODES_PER_REQUEST);
       let itemError: unknown;
       for (const episode of pending) {
         try {

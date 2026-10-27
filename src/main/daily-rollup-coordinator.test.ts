@@ -127,7 +127,8 @@ test("continues consolidating later days after one item-scoped failure", async (
 
   const state = await coordinator.consolidatePending();
 
-  assert.deepEqual(calls, ["2026-08-14", "2026-08-15"]);
+  // Newest day first, so today's rollup is not starved by older backlog.
+  assert.deepEqual(calls, ["2026-08-15", "2026-08-14"]);
   assert.deepEqual(state.items.map(({ date }) => date), ["2026-08-15"]);
   assert.equal(state.pendingDayCount, 1);
   assert.match(state.lastError ?? "", /couldn't update part of your timeline/i);
@@ -168,6 +169,6 @@ function testInferenceSettings() {
     version: 1 as const,
     enabled: true,
     provider: "openai" as const,
-    models: { apple: "system-default", openai: "test-model", anthropic: "test-model", kimi: "test-model" }
+    models: { apple: "system-default", local: "unused", openai: "test-model", anthropic: "test-model", kimi: "test-model" }
   };
 }

@@ -6,6 +6,7 @@ import { inferenceErrorMetadata, publicInferenceErrorMessage } from "./openai-er
 import { isItemScopedInferenceError } from "./inference/errors";
 import { TimelineStore } from "./timeline-store";
 import { timelineRevision } from "./provenance";
+import { newestFirstWithOldestProgress } from "./catch-up-priority";
 
 const MAX_DAYS_PER_REQUEST = 3;
 
@@ -51,7 +52,8 @@ export class DailyRollupCoordinator {
     try {
       if (!this.inference.configured) throw new Error(this.inference.unavailableMessage);
       let itemError: unknown;
-      for (const day of this.pendingDays().slice(0, MAX_DAYS_PER_REQUEST)) {
+      // Prioritize today while reserving one slot so historical days continue to backfill.
+      for (const day of newestFirstWithOldestProgress(this.pendingDays(), MAX_DAYS_PER_REQUEST)) {
         try {
           this.dailyRollupStore.save(
             await this.inference.consolidateDailyRollup(

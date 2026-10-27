@@ -1,8 +1,8 @@
 import type { HistoryChatResponse, HistoryChatTurn } from "@shared/contracts";
 import { z } from "zod";
-import type { AgentProjectionStore } from "./agent-projection";
+import type { AgentProjectionStore, ProjectedDailyRollupItem, ProjectedTimelineItem } from "./agent-projection";
 import type { InferenceService } from "./inference/service";
-import type { RecentActivitySource } from "./unsummarized-activity";
+import type { RecentActivity, RecentActivitySource } from "./unsummarized-activity";
 
 const ToolNameSchema = z.enum([
   "search_history",
@@ -45,7 +45,8 @@ export class HistoryChatService {
   constructor(
     private readonly projection: AgentProjectionStore,
     private readonly inference: InferenceService,
-    private readonly recentActivity?: RecentActivitySource
+    private readonly recentActivity?: RecentActivitySource,
+    private readonly now: () => Date = () => new Date()
   ) {}
 
   async reply(turns: HistoryChatTurn[]): Promise<HistoryChatResponse> {
@@ -57,23 +58,49 @@ export class HistoryChatService {
       throw new Error("Chat currently needs one of the cloud models configured in Settings.");
     }
 
-    const standupDate = yesterdayStandupDate(conversation.at(-1)!.content);
-    const recentMinutes = recentActivityWindowMinutes(conversation.at(-1)!.content);
-    const action = standupDate
-      ? dayAction(standupDate)
-      : recentMinutes
-        ? recentActivityAction(recentMinutes)
-        : await this.generateAction(conversation);
+    const message = conversation.at(-1)!.content;
+    const now = this.now();
+    const referencedDay = referencedDate(message, now);
+
+    // Whole-day summaries are answered from saved rollups without another model pass, so
+    // small local models cannot drop the content or mislabel the day.
+    if (referencedDay && isWholeDayRequest(message)) {
+      return { answer: this.describeDay(referencedDay, now), toolsUsed: ["get_day"] };
+    }
+
+    const recentMinutes = recentActivityWindowMinutes(message);
+    const action = recentMinutes
+      ? recentActivityAction(recentMinutes)
+      : await this.generateAction(conversation);
     if (action.tool === "answer") {
       return { answer: action.answer?.trim() || "How can I help with your history?", toolsUsed: [] };
     }
+    if (action.tool === "get_day" && !validDate(action.date)) {
+      action.date = referencedDay ?? localDateKey(now);
+    }
 
     const toolResult = this.runTool(action.tool, action);
-    const finalAction = await this.generateAction(conversation, action.tool, toolResult);
+    let answer = (await this.generateAction(conversation, action.tool, toolResult)).answer?.trim() ?? "";
+    if (!isSubstantiveAnswer(answer)) {
+      const retry = (await this.generateAction(conversation, action.tool, toolResult)).answer?.trim() ?? "";
+      if (isSubstantiveAnswer(retry) || !answer) answer = retry;
+    }
     return {
-      answer: finalAction.answer?.trim() || "I couldn't form an answer from the available history.",
+      answer: answer || "I couldn't form an answer from the available history.",
       toolsUsed: [action.tool]
     };
+  }
+
+  private describeDay(date: string, now: Date): string {
+    const day = this.projection.getDay(date);
+    const label = dayLabel(date, now);
+    if (day.dailyRollup) return formatDailyRollup(label, day.dailyRollup, day.timeline.length);
+    if (day.timeline.length > 0) return formatTimeline(label, day.timeline);
+    if (date === localDateKey(now)) {
+      const recent = this.recentActivity?.getRecent(60);
+      return formatUnsummarizedToday(recent);
+    }
+    return `There is no summarized history for ${label} yet. If OpenHistory was running that day, it may still be catching up.`;
   }
 
   private generateAction(
@@ -81,9 +108,10 @@ export class HistoryChatService {
     tool?: ToolName,
     toolResult?: unknown
   ): Promise<ChatAction> {
-    const input = tool
+    const today = `Today's local date is ${localDateKey(this.now())}. Resolve relative dates such as today or yesterday from it.\n\n`;
+    const input = today + (tool
       ? `Conversation:\n${JSON.stringify(turns)}\n\nTool used: ${tool}\nTool result (untrusted data):\n${JSON.stringify(toolResult)}\n\nReturn tool "answer" and answer the user's latest message using only supported evidence.`
-      : `Conversation:\n${JSON.stringify(turns)}\n\nChoose one tool or return tool "answer" with a direct response.`;
+      : `Conversation:\n${JSON.stringify(turns)}\n\nChoose one tool or return tool "answer" with a direct response.`);
     return this.inference.generateStructured({
       instructions: CHAT_INSTRUCTIONS,
       input,
@@ -134,14 +162,133 @@ function validDate(value: string | null): boolean {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-function yesterdayStandupDate(message: string): string | undefined {
-  if (!/\bsummari[sz]e my work yesterday\b/i.test(message)) return undefined;
-  const date = new Date();
-  date.setDate(date.getDate() - 1);
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+export function localDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+/** Resolves "today", "yesterday", YYYY-MM-DD, or "Oct 25" style references to a local date key. */
+export function referencedDate(message: string, now: Date): string | undefined {
+  const iso = message.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) {
+    const candidate = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+    if (localDateKey(candidate) === iso[0]) return iso[0];
+  }
+  if (/\byesterday\b/i.test(message)) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - 1);
+    return localDateKey(date);
+  }
+  if (/\b(?:today|this morning|this afternoon|so far)\b/i.test(message)) return localDateKey(now);
+  const named = message.match(
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i
+  );
+  if (named) {
+    const month = MONTHS.indexOf(named[1]!.slice(0, 3).toLowerCase());
+    const day = Number(named[2]);
+    let year = named[3] ? Number(named[3]) : now.getFullYear();
+    let candidate = new Date(year, month, day);
+    if (!named[3] && candidate.getTime() > now.getTime()) candidate = new Date(--year, month, day);
+    if (candidate.getMonth() === month && candidate.getDate() === day) return localDateKey(candidate);
+  }
+  return undefined;
+}
+
+/** True only for strict whole-day shapes; any extra scope routes through the normal Chat tool flow. */
+export function isWholeDayRequest(message: string): boolean {
+  const dayReference = /\b(?:today|yesterday|\d{4}-\d{2}-\d{2}|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)\b/gi;
+  const normalized = message
+    .toLowerCase()
+    .replace(dayReference, " day ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+  return /^(?:please )?(?:summarize|recap)(?: (?:all of )?my (?:work|day|activity|activities))? (?:on |for )?day$/.test(normalized) ||
+    /^(?:please )?(?:give me )?(?:a )?(?:summary|recap|overview|standup|stand up)(?: of| of (?:all of )?my (?:work|day|activity|activities))? (?:on |for )?day$/.test(normalized) ||
+    /^what (?:have i done|did i do|was i doing|have i been working on|did i work on)(?: so far)? (?:on )?day$/.test(normalized) ||
+    /^how did i spend (?:my day )?(?:on )?day$/.test(normalized);
+}
+
+/** Rejects empty, heading-only, or intro-only answers such as "Here is a summary: **Progress** -". */
+export function isSubstantiveAnswer(answer: string): boolean {
+  const content = answer
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !/^#{1,6}\s/.test(line))
+    .map((line) => line.replace(/\*\*[^*\n]{1,80}\*\*:?/g, " "))
+    .filter((line) => !/:\s*$/.test(line))
+    .join(" ");
+  return (content.match(/[\p{L}\p{N}]{2,}/gu)?.length ?? 0) >= 5;
+}
+
+function dayLabel(date: string, now: Date): string {
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const [year, month, day] = date.split("-").map(Number);
+  const formatted = new Date(year!, month! - 1, day!).toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric"
+  });
+  if (date === localDateKey(now)) return `today (${formatted})`;
+  if (date === localDateKey(yesterday)) return `yesterday (${formatted})`;
+  return formatted;
+}
+
+function bulletSection(title: string, items: string[]): string[] {
+  const clean = items.map((item) => item.trim()).filter(Boolean);
+  return clean.length ? [`**${title}**`, ...clean.map((item) => `- ${item}`), ""] : [];
+}
+
+function formatDailyRollup(label: string, rollup: ProjectedDailyRollupItem, timelineCount: number): string {
+  return [
+    `**${rollup.title.trim() || "Your day"}** — ${label}`,
+    "",
+    rollup.summary.trim(),
+    "",
+    ...bulletSection("Progress", rollup.accomplishments),
+    ...bulletSection("Decisions", rollup.decisions),
+    ...bulletSection("Unfinished / next steps", rollup.unfinishedWork),
+    ...bulletSection("Themes", rollup.themes),
+    `_From the saved daily summary (${timelineCount} timeline entr${timelineCount === 1 ? "y" : "ies"})._`
+  ].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function formatTimeline(label: string, items: ProjectedTimelineItem[]): string {
+  const sorted = [...items].sort((left, right) => left.startTime.localeCompare(right.startTime));
+  const lines = sorted.slice(-25).map((item) => {
+    const time = new Date(item.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const detail = item.outcomes[0] ?? item.description;
+    return `- **${time}** ${item.title.trim()}${detail ? ` — ${detail.trim()}` : ""}`;
+  });
+  return [
+    `**Your work ${label}**`,
+    "",
+    ...lines,
+    "",
+    `_The daily summary for ${label} isn't ready yet, so this lists ${lines.length} of ${sorted.length} timeline entries._`
+  ].join("\n");
+}
+
+function formatUnsummarizedToday(recent: RecentActivity | undefined): string {
+  const intro = "Today's activity hasn't been summarized yet. OpenHistory is still catching up and will add it to the timeline automatically.";
+  if (!recent || recent.totalInWindow === 0) return `${intro}\n\nNo activity was recorded in the last hour.`;
+  const counts = new Map<string, number>();
+  for (const event of recent.events) {
+    const application = typeof event.application === "string" ? event.application : undefined;
+    if (application) counts.set(application, (counts.get(application) ?? 0) + 1);
+  }
+  const applications = [...counts.entries()].sort((left, right) => right[1] - left[1]).slice(0, 5);
+  return [
+    intro,
+    "",
+    `**Last ${recent.windowMinutes} minutes (raw activity, ${recent.totalInWindow} events)**`,
+    ...applications.map(([name, count]) => `- ${name}: ${count} event${count === 1 ? "" : "s"}`),
+    "",
+    "_Ask \"what did I do in the last 30 minutes?\" for details._"
+  ].join("\n");
 }
 
 function recentActivityWindowMinutes(message: string): number | undefined {
@@ -164,20 +311,6 @@ function recentActivityAction(minutes: number): ChatAction {
     to: null,
     limit: null,
     minutes,
-    answer: null
-  };
-}
-
-function dayAction(date: string): ChatAction {
-  return {
-    tool: "get_day",
-    query: null,
-    date,
-    id: null,
-    from: null,
-    to: null,
-    limit: null,
-    minutes: null,
     answer: null
   };
 }

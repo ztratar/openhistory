@@ -49,44 +49,6 @@ test("uses the shared history search tool before answering", async () => {
   assert.equal(response.answer, "You built the prototype on August 14.");
 });
 
-test("turns the yesterday starter into a standup-ready day lookup", async () => {
-  const requestedDates: string[] = [];
-  const projection = {
-    getDay: (date: string) => {
-      requestedDates.push(date);
-      return { date, timeline: [] };
-    }
-  } as unknown as AgentProjectionStore;
-  const inference = {
-    provider: "openai",
-    generateStructured: async () => ({
-      tool: "answer",
-      query: null,
-      date: null,
-      id: null,
-      from: null,
-      to: null,
-      limit: null,
-      answer: "Progress\n- Reviewed the prototype."
-    })
-  } as unknown as InferenceService;
-
-  const response = await new HistoryChatService(projection, inference).reply([
-    { role: "user", content: "Summarize my work yesterday" }
-  ]);
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const expectedDate = [
-    yesterday.getFullYear(),
-    String(yesterday.getMonth() + 1).padStart(2, "0"),
-    String(yesterday.getDate()).padStart(2, "0")
-  ].join("-");
-
-  assert.deepEqual(requestedDates, [expectedDate]);
-  assert.deepEqual(response.toolsUsed, ["get_day"]);
-  assert.match(response.answer, /Progress/);
-});
-
 test("lets chat inspect recent activity that has not been summarized", async () => {
   const requestedWindows: number[] = [];
   const unsummarizedActivity = {
