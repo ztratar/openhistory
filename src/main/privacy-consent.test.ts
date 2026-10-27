@@ -9,7 +9,7 @@ const cloud: InferenceSettings = {
   version: 1,
   enabled: true,
   provider: "openai",
-  models: { apple: "system-default", openai: "gpt-test", anthropic: "a", kimi: "k" }
+  models: { apple: "system-default", local: "unused", openai: "gpt-test", anthropic: "a", kimi: "k" }
 };
 
 test("requires specific confirmation before enabled cloud inference", () => {

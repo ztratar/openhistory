@@ -125,7 +125,7 @@ test("can disable inference and switch direct providers without exposing credent
     version: 1 as const,
     enabled: false,
     provider: "openai" as const,
-    models: { apple: "system-default", openai: "gpt-5.6-luna", anthropic: "claude-sonnet-5", kimi: "kimi-k3" }
+    models: { apple: "system-default", local: "unused", openai: "gpt-5.6-luna", anthropic: "claude-sonnet-5", kimi: "kimi-k3" }
   };
   const service = new InferenceService({ apiKey: "sk-test-secret-that-is-long-enough", settings });
   assert.equal(service.configured, false);
@@ -157,6 +157,7 @@ test("retries malformed structured output once with a larger output budget", asy
       provider: "openai",
       models: {
         apple: "system-default",
+        local: "unused",
         openai: "synthetic-openai",
         anthropic: "synthetic-anthropic",
         kimi: "synthetic-kimi"
@@ -174,6 +175,43 @@ test("retries malformed structured output once with a larger output budget", asy
 
   assert.deepEqual(result, { title: "Recovered summary" });
   assert.deepEqual(budgets, [300, 600]);
+});
+
+test("does not retry an HTTP 507 memory-capacity failure", async () => {
+  let calls = 0;
+  const adapter = {
+    provider: "local" as const,
+    model: "synthetic-local",
+    async generate<T>(): Promise<T> {
+      calls += 1;
+      throw Object.assign(new Error("Insufficient Storage"), { status: 507 });
+    }
+  };
+  const service = new InferenceService({
+    adapter,
+    settings: {
+      version: 1,
+      enabled: true,
+      provider: "local",
+      localBaseUrl: "http://127.0.0.1:8080/v1",
+      models: {
+        apple: "system-default",
+        local: "synthetic-local",
+        openai: "synthetic-openai",
+        anthropic: "synthetic-anthropic",
+        kimi: "synthetic-kimi"
+      }
+    }
+  });
+
+  await assert.rejects(service.generateStructured({
+    instructions: "Synthetic instructions",
+    input: "Synthetic input",
+    schema: z.object({ title: z.string() }),
+    schemaName: "synthetic_entry",
+    maxOutputTokens: 300
+  }), (error: unknown) => Boolean(error && typeof error === "object" && "status" in error && error.status === 507));
+  assert.equal(calls, 1);
 });
 
 test("falls back when captured application names are blank", async () => {
@@ -202,6 +240,7 @@ test("falls back when captured application names are blank", async () => {
       provider: "openai",
       models: {
         apple: "system-default",
+        local: "unused",
         openai: "synthetic-openai",
         anthropic: "synthetic-anthropic",
         kimi: "synthetic-kimi"

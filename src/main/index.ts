@@ -8,12 +8,14 @@ import {
   type CollectionSettings,
   type HistoryChatTurn,
   type HourState,
+  type LocalInferenceProbeResult,
   type InferenceOnboardingSelection,
   type DailyRollupState,
   type TimelineApplication,
   type TimelineState
 } from "@shared/contracts";
 import {
+  effectiveLocalInferenceBaseUrl,
   INFERENCE_PROVIDERS,
   isCloudInferenceProvider,
   isInferenceProvider,
@@ -21,7 +23,8 @@ import {
   type CloudInferenceProvider,
   type ApiKeySource,
   type InferenceProvider,
-  type InferenceSettings
+  type InferenceSettings,
+  type LocalInferenceConnectionState
 } from "@shared/inference";
 import {
   app,
@@ -79,6 +82,8 @@ import { InferenceService } from "./openai-service";
 import { inferenceErrorMetadata, publicInferenceErrorMessage } from "./openai-error";
 import { writePrivateFile } from "./private-storage";
 import { cloudInferenceNeedsApiKey, cloudInferenceNeedsConsent } from "./privacy-consent";
+import { nextLocalInferenceConnection } from "./local-inference-connection";
+import { probeLocalInferenceServer } from "./local-inference-probe";
 import { ALWAYS_PROTECTED_BUNDLE_IDENTIFIERS } from "./privacy-policy";
 import { reconcileProtectedHistory } from "./privacy-reconciler";
 import { isTrustedRendererUrl, safeExternalHttpsUrl } from "./renderer-security";
@@ -108,6 +113,7 @@ let appleAvailability: AppleInferenceAvailability;
 let apiKeyStores: Record<InferenceProvider, ApiKeyStore>;
 let apiKeySources: Record<InferenceProvider, ApiKeySource> = {
   apple: "none",
+  local: "none",
   openai: "none",
   anthropic: "none",
   kimi: "none"
@@ -118,6 +124,8 @@ let dailyRollup: DailyRollupCoordinator;
 let agentMcp: AgentMcpService;
 let historyChat: HistoryChatService;
 let derivedStateTimer: ReturnType<typeof setInterval> | undefined;
+let localInferenceProbeTimer: ReturnType<typeof setInterval> | undefined;
+let localInferenceConnection: LocalInferenceConnectionState | undefined;
 let automaticHistoryTimer: ReturnType<typeof setInterval> | undefined;
 let initialHistoryTimer: ReturnType<typeof setTimeout> | undefined;
 let catchUpHistoryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -362,6 +370,25 @@ function sendBootstrapState(): void {
   mainWindow.webContents.send(IPC_CHANNELS.bootstrapState, bootstrapState());
 }
 
+async function refreshLocalInferenceConnection(): Promise<LocalInferenceProbeResult | undefined> {
+  if (inferenceSettings.provider !== "local") {
+    localInferenceConnection = undefined;
+    return undefined;
+  }
+  const baseUrl = effectiveLocalInferenceBaseUrl(inferenceSettings.localBaseUrl);
+  if (!baseUrl) {
+    localInferenceConnection = undefined;
+    return undefined;
+  }
+  const result = await probeLocalInferenceServer(baseUrl, activeApiKey("local"));
+  // Ignore a stale response if settings changed while the request was in flight.
+  if (inferenceSettings.provider !== "local" || effectiveLocalInferenceBaseUrl(inferenceSettings.localBaseUrl) !== baseUrl) return result;
+  const checkedAt = new Date().toISOString();
+  localInferenceConnection = nextLocalInferenceConnection(localInferenceConnection, result, checkedAt);
+  sendBootstrapState();
+  return result;
+}
+
 function toggleCollectionFromTray(): void {
   const current = settingsStore.load();
   if (!collector.enabled && current.privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) {
@@ -470,7 +497,8 @@ function bootstrapState(): BootstrapState {
       settings: structuredClone(inferenceSettings),
       configured: inference.configured,
       appleAvailability: { ...appleAvailability },
-      keySources: { ...apiKeySources }
+      keySources: { ...apiKeySources },
+      ...(localInferenceConnection ? { localConnection: { ...localInferenceConnection } } : {})
     },
     recentEvents: collector.recentEvents,
     timeline: timeline.getState(),
@@ -578,7 +606,11 @@ async function initialize(): Promise<void> {
     provider,
     apiKeyStores[provider].load() ? "saved" : environmentApiKeys[provider] ? "environment" : "none"
   ])) as Record<InferenceProvider, ApiKeySource>;
-  inferenceSettingsStore = new InferenceSettingsStore(config.dataDirectory, config.inferenceModels);
+  inferenceSettingsStore = new InferenceSettingsStore(
+    config.dataDirectory,
+    config.inferenceModels,
+    config.localInferenceBaseUrl
+  );
   inferenceSettings = inferenceSettingsStore.load();
   settingsStore = new SettingsStore(config.dataDirectory);
   const settings = settingsStore.load();
@@ -659,6 +691,14 @@ async function initialize(): Promise<void> {
     }
     return bootstrapState();
   });
+  handleTrustedIpc(IPC_CHANNELS.probeLocalInference, async (_event, baseUrl: unknown) => {
+    const testedBaseUrl = effectiveLocalInferenceBaseUrl(baseUrl);
+    const savedBaseUrl = effectiveLocalInferenceBaseUrl(inferenceSettings.localBaseUrl);
+    if (testedBaseUrl && testedBaseUrl === savedBaseUrl && inferenceSettings.provider === "local") {
+      return (await refreshLocalInferenceConnection())!;
+    }
+    return probeLocalInferenceServer(baseUrl, activeApiKey("local"));
+  });
   handleTrustedIpc(IPC_CHANNELS.setCollectionEnabled, (_event, enabled: boolean) => {
     if (enabled && settingsStore.load().privacyNoticeVersion < CURRENT_PRIVACY_NOTICE_VERSION) {
       throw new Error("Accept the privacy notice before starting activity capture");
@@ -718,6 +758,8 @@ async function initialize(): Promise<void> {
     if (historyBuildPromise) await historyBuildPromise;
     inferenceSettings = inferenceSettingsStore.save(next);
     inference.configure(inferenceSettings, activeApiKey(inferenceSettings.provider));
+    if (inferenceSettings.provider === "local") void refreshLocalInferenceConnection();
+    else localInferenceConnection = undefined;
     buildHistoryIfNeeded();
     return bootstrapState();
   });
@@ -945,6 +987,8 @@ async function initialize(): Promise<void> {
   }, 60_000);
   initialHistoryTimer = setTimeout(buildHistoryIfNeeded, 15_000);
   automaticHistoryTimer = setInterval(buildHistoryIfNeeded, AUTOMATIC_HISTORY_INTERVAL_MS);
+  if (inferenceSettings.provider === "local") void refreshLocalInferenceConnection();
+  localInferenceProbeTimer = setInterval(() => void refreshLocalInferenceConnection(), 30_000);
 
   app.on("activate", () => {
     if (appPresentationMode === "menuBar") showMenuBarWindow();
@@ -995,6 +1039,7 @@ if (!app.requestSingleInstanceLock()) {
 app.on("before-quit", () => {
   isQuitting = true;
   if (derivedStateTimer) clearInterval(derivedStateTimer);
+  if (localInferenceProbeTimer) clearInterval(localInferenceProbeTimer);
   if (automaticHistoryTimer) clearInterval(automaticHistoryTimer);
   if (initialHistoryTimer) clearTimeout(initialHistoryTimer);
   if (catchUpHistoryTimer) clearTimeout(catchUpHistoryTimer);

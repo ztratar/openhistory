@@ -77,7 +77,7 @@ const productionService = new InferenceService({
     version: 1,
     enabled: true,
     provider: "apple",
-    models: { apple: "system-default", openai: "unused", anthropic: "unused", kimi: "unused" }
+    models: { apple: "system-default", local: "unused", openai: "unused", anthropic: "unused", kimi: "unused" }
   }
 });
 const allVariants: Variant[] = ["current", "coverage", "budgeted", "hybrid", "production"];

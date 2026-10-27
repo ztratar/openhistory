@@ -29,6 +29,7 @@ export function isRetryableInferenceError(error: unknown): boolean {
   ].includes(name)) return true;
 
   const status = errorStatus(error);
+  if (status === 507) return false;
   return status === 408 || status === 409 || status === 429 || Boolean(status && status >= 500);
 }
 

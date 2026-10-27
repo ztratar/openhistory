@@ -89,6 +89,9 @@ export class InferenceService {
     if (this.settings.enabled && this.settings.provider === "apple") {
       return probeAppleFoundationModel().reason ?? "Apple's on-device model is unavailable.";
     }
+    if (this.settings.enabled && this.settings.provider === "local") {
+      return "The local inference server address is not a private network address. Check Settings.";
+    }
     return this.settings.enabled
       ? "No inference API key is configured. Add one in Settings."
       : "Automatic summaries are turned off in Settings.";
@@ -105,6 +108,19 @@ export class InferenceService {
       this.adapter = availability.available
         ? createInferenceProvider({ provider: "apple", model: settings.models.apple })
         : undefined;
+      return;
+    }
+    if (settings.provider === "local") {
+      try {
+        this.adapter = createInferenceProvider({
+          provider: "local",
+          apiKey,
+          baseUrl: settings.localBaseUrl,
+          model: settings.models.local
+        });
+      } catch {
+        this.adapter = undefined;
+      }
       return;
     }
     this.adapter = apiKey

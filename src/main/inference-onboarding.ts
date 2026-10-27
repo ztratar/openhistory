@@ -14,7 +14,8 @@ export function normalizeInferenceOnboardingSelection(
   if (!isInferenceProvider(candidate.provider)) throw new Error("Invalid inference provider");
 
   const model = typeof candidate.model === "string" ? candidate.model.trim() : "";
-  if (!INFERENCE_MODEL_OPTIONS[candidate.provider].some((option) => option.id === model)) {
+  const freeformModel = candidate.provider === "local" && model.length > 0 && model.length <= 200;
+  if (!freeformModel && !INFERENCE_MODEL_OPTIONS[candidate.provider].some((option) => option.id === model)) {
     throw new Error("Choose a supported model");
   }
   if (candidate.captureEmailActivity !== undefined &&

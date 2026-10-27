@@ -48,7 +48,7 @@ const settings = {
   version: 1 as const,
   enabled: true,
   provider: "apple" as const,
-  models: { apple: "system-default", openai: "unused", anthropic: "unused", kimi: "unused" }
+  models: { apple: "system-default", local: "unused", openai: "unused", anthropic: "unused", kimi: "unused" }
 };
 const service = new InferenceService({ settings });
 if (!service.configured) throw new Error(service.unavailableMessage);

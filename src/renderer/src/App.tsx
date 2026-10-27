@@ -1,4 +1,5 @@
 import type {
+  LocalInferenceProbeResult,
   BootstrapState,
   CollectionSettings,
   AppPresentationMode,
@@ -21,6 +22,8 @@ import {
   INFERENCE_MODEL_OPTIONS,
   INFERENCE_PROVIDER_LABELS,
   INFERENCE_PROVIDERS,
+  DEFAULT_LOCAL_INFERENCE_BASE_URL,
+  effectiveLocalInferenceBaseUrl,
   type ApiKeySource,
   type AppleInferenceAvailability,
   type CloudInferenceProvider,
@@ -330,7 +333,7 @@ function ChatPage({
               <svg viewBox="0 0 20 20"><path d="M4 4.5h12v8H9l-3.5 3v-3H4v-8Z" /></svg>
             </div>
             <strong>Ask about what you’ve worked on</strong>
-            <p>Chat can search sanitized history and inspect privacy-filtered recent activity from a requested time window. Requests go to your configured cloud model.</p>
+            <p>Chat can search sanitized history and inspect privacy-filtered recent activity from a requested time window. Requests go to your configured {state.inference.settings.provider === "local" ? "private local server" : "model provider"}.</p>
             {configured ? (
               <div className="chat-starters">
                 {CHAT_STARTERS.map((starter) => (
@@ -340,7 +343,7 @@ function ChatPage({
             ) : (
               <div className="chat-model-notice">
                 <span>{state.inference.settings.provider === "apple"
-                  ? "Chat currently needs a cloud model."
+                  ? "Chat needs a Chat-capable local or cloud model."
                   : "Set up a model to use Chat."}</span>
                 <button onClick={onOpenSettings} type="button">Open Settings</button>
               </div>
@@ -600,6 +603,12 @@ const INFERENCE_ONBOARDING_COPY: Record<InferenceProvider, {
     drawback: "Lower quality. Requires Apple Intelligence on a compatible Mac.",
     name: "Apple On-Device"
   },
+  local: {
+    badge: "Private server",
+    description: "Use your own OpenAI-compatible server, such as oMLX, LM Studio, or Ollama. Evidence stays on your network.",
+    drawback: "Quality depends on the model you run. Configure the server address in Settings.",
+    name: "Local server"
+  },
   openai: {
     badge: "High quality",
     description: "Strongest overall summaries and interpretation of ambiguous work.",
@@ -623,6 +632,9 @@ const INFERENCE_ONBOARDING_COPY: Record<InferenceProvider, {
 function ProviderLogo({ provider }: { provider: InferenceProvider }): React.JSX.Element {
   if (provider === "apple") {
     return <svg viewBox="0 0 24 24"><path d="M11.932 6.908c.95 0 2.727-1.291 4.595-1.1.782.032 2.976.316 4.388 2.38-.113.069-2.622 1.528-2.593 4.565.034 3.617 3.166 4.828 3.221 4.85-.029.086-.506 1.723-1.658 3.416-1.002 1.463-2.039 2.919-3.675 2.95-1.606.03-2.125-.955-3.96-.955s-2.409.923-3.931.984c-1.581.06-2.78-1.58-3.79-3.037-2.065-2.98-3.64-8.422-1.527-12.087 1.051-1.824 2.93-2.98 4.969-3.009 1.549-.032 3.011 1.043 3.96 1.043zM16.552 0c.153 1.407-.411 2.817-1.251 3.833-.837 1.013-2.214 1.804-3.555 1.7-.185-1.378.495-2.814 1.27-3.712C13.883.805 15.346.05 16.553 0z" /></svg>;
+  }
+  if (provider === "local") {
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" strokeLinecap="round" /></svg>;
   }
   if (provider === "openai") {
     return <svg viewBox="0 0 24 24"><path d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z" /></svg>;
@@ -782,7 +794,7 @@ function InferenceOnboarding({
                 <span className="provider-choice-topline">
                   <strong>{copy.name}</strong>
                   <span className="provider-choice-badges">
-                    <span className={`provider-choice-badge ${candidate === "apple" ? "private" : "cloud"}`}>{copy.badge}</span>
+                    <span className={`provider-choice-badge ${candidate === "apple" || candidate === "local" ? "private" : "cloud"}`}>{copy.badge}</span>
                     {candidate === "apple" ? (
                       <span className="provider-choice-badge experimental"><BadgeIcon kind="experimental" />Experimental</span>
                     ) : candidate === "openai" ? (
@@ -1299,15 +1311,24 @@ function HistoryPage({
           <span className="api-key-callout-copy">
             <strong>{state.inference.settings.provider === "apple"
               ? appleGuidance.title
-              : "Automatic timeline updates need an API key"}</strong>
+              : state.inference.settings.provider === "local"
+                ? "Check the local server address"
+                : "Automatic timeline updates need an API key"}</strong>
             <span>{state.inference.settings.provider === "apple"
               ? appleGuidance.description
-              : `Add a key for ${INFERENCE_PROVIDER_LABELS[state.inference.settings.provider]} in Settings.`}</span>
+              : state.inference.settings.provider === "local"
+                ? "The local inference server must use a private network address. Review it in Settings."
+                : `Add a key for ${INFERENCE_PROVIDER_LABELS[state.inference.settings.provider]} in Settings.`}</span>
           </span>
           <button className="api-key-callout-action" onClick={onAddApiKey} type="button">
-            {state.inference.settings.provider === "apple" ? "Review" : "Add now"} <span aria-hidden="true">→</span>
+            {state.inference.settings.provider === "apple" || state.inference.settings.provider === "local" ? "Review" : "Add now"} <span aria-hidden="true">→</span>
           </button>
         </div>
+      ) : null}
+      {state.inference.settings.provider === "local" && state.inference.localConnection?.reachable === false ? (
+        <ErrorMessage>
+          Local server unreachable since {formatConnectionTime(state.inference.localConnection.unreachableSince)}. {state.inference.localConnection.error ?? "Check the Mac mini, Tailscale, and oMLX."}
+        </ErrorMessage>
       ) : null}
       {updateError ? (
         <div className="history-error-row">
@@ -1942,6 +1963,47 @@ function SettingsPage({
   const inferenceProvider = state.inference.settings.provider;
   const inferenceModel = state.inference.settings.models[inferenceProvider];
   const apiKeySource = state.inference.keySources[inferenceProvider];
+  const savedLocalBaseUrl = effectiveLocalInferenceBaseUrl(state.inference.settings.localBaseUrl) ?? DEFAULT_LOCAL_INFERENCE_BASE_URL;
+  const [localBaseUrl, setLocalBaseUrl] = useState(savedLocalBaseUrl);
+  const [localProbe, setLocalProbe] = useState<LocalInferenceProbeResult>();
+  const [localProbeCheckedAt, setLocalProbeCheckedAt] = useState<Date>();
+  const [probingLocal, setProbingLocal] = useState(false);
+  const localModels = localProbe?.ok ? localProbe.models : [];
+
+  useEffect(() => {
+    setLocalBaseUrl(savedLocalBaseUrl);
+  }, [savedLocalBaseUrl]);
+
+  useEffect(() => {
+    if (inferenceProvider === "local") void testLocalServer(savedLocalBaseUrl);
+    // Probe once when the local provider is selected or its saved address changes.
+  }, [inferenceProvider, savedLocalBaseUrl]);
+
+  async function testLocalServer(baseUrl: string): Promise<LocalInferenceProbeResult> {
+    setProbingLocal(true);
+    let result: LocalInferenceProbeResult;
+    try {
+      result = await window.openHistory.probeLocalInference(baseUrl);
+    } catch {
+      result = { ok: false, models: [], error: "OpenHistory could not test the server." };
+    } finally {
+      setProbingLocal(false);
+    }
+    setLocalProbe(result);
+    setLocalProbeCheckedAt(new Date());
+    return result;
+  }
+
+  async function saveLocalServer(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    const probe = await testLocalServer(localBaseUrl);
+    if (!probe.baseUrl) {
+      setApiKeyMessage(probe.error);
+      return;
+    }
+    await updateInference({ ...state.inference.settings, localBaseUrl: probe.baseUrl });
+    setApiKeyMessage(probe.ok ? "Local server saved." : `Saved, but the server is not reachable yet. ${probe.error ?? ""}`.trim());
+  }
 
   useEffect(() => {
     if (apiKeyFocusRequest === 0) return;
@@ -2118,6 +2180,8 @@ function SettingsPage({
             <strong>Automatic summaries</strong>
             <small>{inferenceProvider === "apple"
               ? "Summarize activity privately on this Mac about every 10 minutes."
+              : inferenceProvider === "local"
+                ? "Send activity evidence to your private local server about every 10 minutes."
               : "Send activity evidence to your selected provider about every 10 minutes."}</small>
           </span>
           <input
@@ -2150,12 +2214,20 @@ function SettingsPage({
               onChange={(event) => selectModel(event.target.value)}
               value={inferenceModel}
             >
-              {!INFERENCE_MODEL_OPTIONS[inferenceProvider].some(({ id }) => id === inferenceModel) ? (
-                <option value={inferenceModel}>{inferenceModel}</option>
-              ) : null}
-              {INFERENCE_MODEL_OPTIONS[inferenceProvider].map((model) => (
-                <option key={model.id} value={model.id}>{model.label} — {model.description}</option>
-              ))}
+              {inferenceProvider === "local" ? (
+                [...new Set([inferenceModel, ...localModels])].map((model) => (
+                  <option key={model} value={model}>{model}</option>
+                ))
+              ) : (
+                <>
+                  {!INFERENCE_MODEL_OPTIONS[inferenceProvider].some(({ id }) => id === inferenceModel) ? (
+                    <option value={inferenceModel}>{inferenceModel}</option>
+                  ) : null}
+                  {INFERENCE_MODEL_OPTIONS[inferenceProvider].map((model) => (
+                    <option key={model.id} value={model.id}>{model.label} — {model.description}</option>
+                  ))}
+                </>
+              )}
             </select>
           </label>
         </div>
@@ -2181,7 +2253,44 @@ function SettingsPage({
           ))}
         </div>
       </div>
-      {inferenceProvider === "apple" ? (
+      {inferenceProvider === "local" ? (
+        <form className="card api-key-settings" id="api-key-settings" onSubmit={saveLocalServer}>
+          <div className="api-key-heading">
+            <div>
+              <strong>Local server</strong>
+              <span>{probingLocal
+                ? "Testing connection…"
+                : localProbe?.ok
+                  ? `${localProbeCheckedAt ? `Tested at ${localProbeCheckedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} ` : "Connected "}✓ — ${localProbe.models.length} model${localProbe.models.length === 1 ? "" : "s"} available`
+                  : localProbe?.error
+                    ? `${localProbeCheckedAt ? `Test failed at ${localProbeCheckedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} — ` : ""}${localProbe.error}`
+                    : "OpenAI-compatible endpoint, for example oMLX"}</span>
+            </div>
+            <button className="secondary-button" disabled={probingLocal} onClick={() => void testLocalServer(localBaseUrl)} type="button">
+              {probingLocal ? "Testing…" : "Test connection"}
+            </button>
+          </div>
+          <div className="api-key-form">
+            <input
+              aria-label="Local server address"
+              onChange={(event) => setLocalBaseUrl(event.target.value)}
+              placeholder={DEFAULT_LOCAL_INFERENCE_BASE_URL}
+              spellCheck={false}
+              type="url"
+              value={localBaseUrl}
+            />
+            <button
+              className="primary-button"
+              disabled={savingApiKey || !localBaseUrl.trim() || localBaseUrl.trim() === savedLocalBaseUrl}
+              type="submit"
+            >
+              {savingApiKey ? "Saving…" : "Save"}
+            </button>
+          </div>
+          <p>Only loopback, private-network, Tailscale, and <code>.local</code> addresses are accepted, so evidence never leaves your network. Set <code>LOCAL_INFERENCE_API_KEY</code> only if your server requires a token.</p>
+          {apiKeyMessage ? <span className="api-key-message">{apiKeyMessage}</span> : null}
+        </form>
+      ) : inferenceProvider === "apple" ? (
         <div className="card api-key-settings" id="api-key-settings">
           <div className="api-key-heading">
             <div>
@@ -2234,7 +2343,9 @@ function SettingsPage({
         <div className="system-row">
           <span>{state.inference.settings.enabled ? INFERENCE_PROVIDER_LABELS[inferenceProvider] : "Inference"}</span>
           <strong>{state.inference.settings.enabled
-            ? state.inference.configured ? inferenceModel : inferenceProvider === "apple" ? "Unavailable" : "API key missing"
+            ? state.inference.configured
+              ? inferenceModel
+              : inferenceProvider === "apple" || inferenceProvider === "local" ? "Unavailable" : "API key missing"
             : "Off"}</strong>
         </div>
         <div className="system-row data-row">
@@ -2362,6 +2473,15 @@ function EmptyState({ title, children }: { title: string; children: React.ReactN
 
 function Notice({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="notice">{children}</div>;
+}
+
+function formatConnectionTime(value: string | undefined): string {
+  if (!value) return "an unknown time";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "an unknown time" : date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit"
+  });
 }
 
 function ErrorMessage({ children }: { children: React.ReactNode }): React.JSX.Element {

@@ -168,6 +168,6 @@ function testInferenceSettings() {
     version: 1 as const,
     enabled: true,
     provider: "openai" as const,
-    models: { apple: "system-default", openai: "test-model", anthropic: "test-model", kimi: "test-model" }
+    models: { apple: "system-default", local: "unused", openai: "test-model", anthropic: "test-model", kimi: "test-model" }
   };
 }

@@ -18,6 +18,13 @@ test("turns rate limits into a retryable public message", () => {
   assert.doesNotMatch(message, /status|process|log/i);
 });
 
+test("explains local server memory exhaustion without calling it a temporary outage", () => {
+  const message = publicInferenceErrorMessage({ status: 507 }, "History chat", "local");
+  assert.match(message, /does not fit.*available memory/i);
+  assert.match(message, /smaller model/i);
+  assert.doesNotMatch(message, /temporarily unavailable/i);
+});
+
 test("turns malformed model output into a user-facing timeline message", () => {
   const message = publicInferenceErrorMessage(
     new InferenceOutputError("invalid_output"),

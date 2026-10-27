@@ -56,7 +56,7 @@ const settings = (provider: "openai" | "apple") => ({
   version: 1 as const,
   enabled: true,
   provider,
-  models: { apple: "system-default", openai: cloudModel, anthropic: "unused", kimi: "unused" }
+  models: { apple: "system-default", local: "unused", openai: cloudModel, anthropic: "unused", kimi: "unused" }
 });
 const cloudBaselineService = new InferenceService({ apiKey, settings: settings("openai") });
 const appleBaselineService = new InferenceService({ settings: settings("apple") });

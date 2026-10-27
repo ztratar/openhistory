@@ -2,13 +2,14 @@ import { app } from "electron";
 import { config as loadDotEnv } from "dotenv";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import type { InferenceProvider } from "@shared/inference";
+import { DEFAULT_LOCAL_INFERENCE_MODEL, type InferenceProvider } from "@shared/inference";
 
 export interface RuntimeConfig {
   dataDirectory: string;
   adoptExistingDataDirectory: boolean;
   inferenceApiKeys: Record<InferenceProvider, string | undefined>;
   inferenceModels: Record<InferenceProvider, string>;
+  localInferenceBaseUrl?: string;
   mcpPort: number;
 }
 
@@ -46,16 +47,19 @@ export function getRuntimeConfig(): RuntimeConfig {
       : true,
     inferenceApiKeys: {
       apple: undefined,
+      local: process.env.LOCAL_INFERENCE_API_KEY?.trim() || undefined,
       openai: process.env.OPENAI_API_KEY?.trim() || undefined,
       anthropic: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
       kimi: process.env.MOONSHOT_API_KEY?.trim() || undefined
     },
     inferenceModels: {
       apple: "system-default",
+      local: process.env.LOCAL_INFERENCE_MODEL?.trim() || DEFAULT_LOCAL_INFERENCE_MODEL,
       openai: process.env.OPENAI_MODEL?.trim() || "gpt-5.6-luna",
       anthropic: process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-5",
       kimi: process.env.MOONSHOT_MODEL?.trim() || "kimi-k3"
     },
+    localInferenceBaseUrl: process.env.LOCAL_INFERENCE_BASE_URL?.trim() || undefined,
     mcpPort: localPort(process.env.OPENHISTORY_MCP_PORT)
   };
 }

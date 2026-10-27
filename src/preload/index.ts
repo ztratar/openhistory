@@ -27,6 +27,8 @@ const bridge: OpenHistoryBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.completeInferenceOnboarding, selection),
   refreshAppleAvailability: () =>
     ipcRenderer.invoke(IPC_CHANNELS.refreshAppleAvailability),
+  probeLocalInference: (baseUrl) =>
+    ipcRenderer.invoke(IPC_CHANNELS.probeLocalInference, baseUrl),
   authorizeCloudInference: (provider) =>
     ipcRenderer.invoke(IPC_CHANNELS.authorizeCloudInference, provider),
   requestAccessibilityPermission: () => ipcRenderer.invoke(IPC_CHANNELS.requestAccessibility),

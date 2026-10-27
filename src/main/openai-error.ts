@@ -13,6 +13,9 @@ export function publicInferenceErrorMessage(
     return `${providerLabel} can't use the selected model with this account. Check the model in Settings, then retry.`;
   }
   if (status === 429) return `${providerLabel} is busy right now. Nothing was lost, and OpenHistory will try again automatically.`;
+  if (status === 507 && provider === "local") {
+    return `${providerLabel} could not load the selected model because it does not fit in the server's available memory. Close memory-heavy apps or choose a smaller model in Settings, then retry.`;
+  }
   if (status && status >= 500) {
     return `${providerLabel} is temporarily unavailable. Nothing was lost, and OpenHistory will try again automatically.`;
   }

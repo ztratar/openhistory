@@ -25,6 +25,7 @@ test("persists provider, model, and disabled state", async (context) => {
     provider: "kimi",
     models: {
       apple: "system-default",
+      local: "unused",
       openai: "gpt-5.6-terra",
       anthropic: "claude-haiku-4-5",
       kimi: "kimi-k3"
@@ -36,6 +37,7 @@ test("persists provider, model, and disabled state", async (context) => {
     provider: "kimi",
     models: {
       apple: "system-default",
+      local: "unused",
       openai: "gpt-5.6-terra",
       anthropic: "claude-haiku-4-5",
       kimi: "kimi-k3"
@@ -59,3 +61,22 @@ async function testDirectory(context: TestContext): Promise<string> {
   context.after(() => rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
+
+test("loads settings saved before the local provider existed and keeps a private base URL", async (context) => {
+  const directory = await testDirectory(context);
+  writeFileSync(resolve(directory, "inference-settings.json"), JSON.stringify({
+    version: 1,
+    enabled: true,
+    provider: "openai",
+    models: { apple: "system-default", openai: "gpt-5.6-luna", anthropic: "claude-sonnet-5", kimi: "kimi-k3" }
+  }));
+  const store = new InferenceSettingsStore(directory, undefined, "http://127.0.0.1:8080/v1/");
+  const loaded = store.load();
+  assert.equal(loaded.provider, "openai");
+  assert.equal(loaded.models.local, "mlx-community/Qwen3.5-9B-4bit");
+  assert.equal(loaded.localBaseUrl, "http://127.0.0.1:8080/v1");
+
+  const saved = store.save({ ...loaded, provider: "local", localBaseUrl: "http://mac-mini.local:8080/v1" });
+  assert.equal(saved.localBaseUrl, "http://mac-mini.local:8080/v1");
+  assert.throws(() => store.save({ ...loaded, localBaseUrl: "https://api.example.com/v1" }));
+});

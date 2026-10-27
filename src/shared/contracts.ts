@@ -5,6 +5,13 @@ import type {
   InferenceState
 } from "./inference";
 
+export interface LocalInferenceProbeResult {
+  ok: boolean;
+  baseUrl?: string;
+  models: string[];
+  error?: string;
+}
+
 export const CURRENT_PRIVACY_NOTICE_VERSION = 1;
 export const CURRENT_INFERENCE_ONBOARDING_VERSION = 1;
 
@@ -22,6 +29,7 @@ export const IPC_CHANNELS = {
   acceptPrivacyNotice: "openhistory:accept-privacy-notice",
   completeInferenceOnboarding: "openhistory:complete-inference-onboarding",
   refreshAppleAvailability: "openhistory:refresh-apple-availability",
+  probeLocalInference: "openhistory:probe-local-inference",
   authorizeCloudInference: "openhistory:authorize-cloud-inference",
   requestAccessibility: "openhistory:request-accessibility",
   refreshAccessibility: "openhistory:refresh-accessibility",
@@ -294,6 +302,7 @@ export interface OpenHistoryBridge {
   acceptPrivacyNotice(): Promise<BootstrapState>;
   completeInferenceOnboarding(selection: InferenceOnboardingSelection): Promise<BootstrapState>;
   refreshAppleAvailability(): Promise<BootstrapState>;
+  probeLocalInference(baseUrl: string): Promise<LocalInferenceProbeResult>;
   authorizeCloudInference(provider: CloudInferenceProvider): Promise<BootstrapState>;
   requestAccessibilityPermission(): Promise<BootstrapState>;
   refreshAccessibilityPermission(): Promise<BootstrapState>;

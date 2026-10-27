@@ -41,7 +41,7 @@ test("replays timeline, hour, and day outputs through the stable inference facad
       version: 1,
       enabled: true,
       provider: "apple",
-      models: { apple: "system-default", openai: "unused", anthropic: "unused", kimi: "unused" }
+      models: { apple: "system-default", local: "unused", openai: "unused", anthropic: "unused", kimi: "unused" }
     },
     adapter
   });

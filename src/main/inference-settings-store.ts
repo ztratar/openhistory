@@ -1,6 +1,7 @@
 import {
   DEFAULT_INFERENCE_MODELS,
   INFERENCE_PROVIDERS,
+  normalizeLocalInferenceBaseUrl,
   type InferenceProvider,
   type InferenceSettings
 } from "@shared/inference";
@@ -17,17 +18,26 @@ const InferenceSettingsSchema = z.object({
   provider: InferenceProviderSchema,
   models: z.object({
     apple: ModelSchema.default(DEFAULT_INFERENCE_MODELS.apple),
+    local: ModelSchema.default(DEFAULT_INFERENCE_MODELS.local),
     openai: ModelSchema,
     anthropic: ModelSchema,
     kimi: ModelSchema
-  }).strict()
+  }).strict(),
+  localBaseUrl: z.string().trim().max(500)
+    .refine((value) => normalizeLocalInferenceBaseUrl(value) !== undefined, "Use a private network address")
+    .transform((value) => normalizeLocalInferenceBaseUrl(value)!)
+    .optional()
 }).strict();
 
 export class InferenceSettingsStore {
   private readonly path: string;
   private readonly defaults: InferenceSettings;
 
-  constructor(dataDirectory: string, modelDefaults?: Partial<Record<InferenceProvider, string>>) {
+  constructor(
+    dataDirectory: string,
+    modelDefaults?: Partial<Record<InferenceProvider, string>>,
+    localBaseUrlDefault?: string
+  ) {
     this.path = resolve(dataDirectory, "inference-settings.json");
     this.defaults = {
       version: 1,
@@ -36,14 +46,20 @@ export class InferenceSettingsStore {
       models: {
         ...DEFAULT_INFERENCE_MODELS,
         ...normalizedModelDefaults(modelDefaults)
-      }
+      },
+      ...(normalizeLocalInferenceBaseUrl(localBaseUrlDefault)
+        ? { localBaseUrl: normalizeLocalInferenceBaseUrl(localBaseUrlDefault) }
+        : {})
     };
   }
 
   load(): InferenceSettings {
     if (!existsSync(this.path)) return structuredClone(this.defaults);
     try {
-      return InferenceSettingsSchema.parse(JSON.parse(readFileSync(this.path, "utf8")));
+      const stored = InferenceSettingsSchema.parse(JSON.parse(readFileSync(this.path, "utf8")));
+      return stored.localBaseUrl || !this.defaults.localBaseUrl
+        ? stored
+        : { ...stored, localBaseUrl: this.defaults.localBaseUrl };
     } catch (error) {
       console.error("Unable to read inference settings", {
         name: error instanceof Error ? error.name : "UnknownError"

@@ -164,6 +164,7 @@ h2 { margin: 0; color: #2a2a2a; font-family: Georgia, serif; font-size: 20px; fo
 .provider-choice-logo svg { width: 20px; height: 20px; fill: currentColor; }
 .provider-choice-logo.anthropic { color: #d97757; background: rgba(217, 119, 87, .1); border-color: rgba(217, 119, 87, .13); }
 .provider-choice-logo.kimi { color: #1783ff; background: rgba(23, 131, 255, .09); border-color: rgba(23, 131, 255, .13); }
+.provider-choice-logo.local { color: #2f8a5b; background: rgba(47, 138, 91, .09); border-color: rgba(47, 138, 91, .14); }
 .provider-choice-content { display: grid; min-width: 0; gap: 7px; }
 .provider-choice-topline { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 7px; }
 .provider-choice-topline strong { overflow: hidden; padding-top: 2px; color: #333; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -679,6 +680,7 @@ h2 { margin: 0; color: #2a2a2a; font-family: Georgia, serif; font-size: 20px; fo
   .provider-choice-logo { color: #e7e7e7; background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .09); }
   .provider-choice-logo.anthropic { color: #e58a69; background: rgba(217, 119, 87, .13); border-color: rgba(229, 138, 105, .16); }
   .provider-choice-logo.kimi { color: #65adff; background: rgba(23, 131, 255, .12); border-color: rgba(101, 173, 255, .15); }
+  .provider-choice-logo.local { color: #6fcf9a; background: rgba(47, 138, 91, .14); border-color: rgba(111, 207, 154, .16); }
   .model-choice-row { color: #d0d0d0; background: rgba(255, 255, 255, .04); border-color: rgba(238, 238, 238, .11); }
   .model-choice-row.selected { background: rgba(109, 166, 232, .1); border-color: rgba(139, 184, 237, .28); }
   .model-onboarding-sheet.card { background: rgba(31, 31, 31, .97); box-shadow: 0 -10px 48px rgba(0, 0, 0, .42); }

@@ -85,7 +85,7 @@ const settings = {
   version: 1 as const,
   enabled: true,
   provider: "openai" as const,
-  models: { apple: "system-default", openai: model, anthropic: "unused", kimi: "unused" }
+  models: { apple: "system-default", local: "unused", openai: model, anthropic: "unused", kimi: "unused" }
 };
 const service = new InferenceService({ apiKey, settings });
 const evaluator = createInferenceProvider({ apiKey, provider: "openai", model });
