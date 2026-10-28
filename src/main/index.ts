@@ -26,6 +26,7 @@ import {
 import {
   app,
   BrowserWindow,
+  powerSaveBlocker,
   clipboard,
   dialog,
   ipcMain,
@@ -561,6 +562,14 @@ function applicationIcon(application: TimelineApplication): Promise<string | und
 }
 
 async function initialize(): Promise<void> {
+  // OpenHistory runs as a menu-bar-only accessory app with no persistent
+  // visible window. Without this, macOS App Nap throttles/suspends the
+  // main process's background timers once it's been idle for a while,
+  // silently stalling automatic history catch-up (episodes/hours/days
+  // stop advancing) until the app is manually relaunched. This keeps the
+  // process fully active regardless of window visibility or focus.
+  powerSaveBlocker.start("prevent-app-suspension");
+
   const icon = openHistoryIconPath();
   if (process.platform === "darwin" && icon) app.dock?.setIcon(icon);
 
